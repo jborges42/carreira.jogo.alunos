@@ -1,0 +1,144 @@
+/* Painel Admin (Perguntas, Escolas, Brindes, Relatórios) — complementa style.css. */
+[hidden] { display: none !important; } /* .btn/.selo definem display e venceriam o atributo hidden */
+
+.subtitulo { /* fundo escuro: o branco sobre o fim claro do degradê não chegava a 4,5:1 (A40/D26) */
+  width: fit-content; max-width: 80ch; margin: -6px 0 18px; padding: 8px 14px; color: #fff;
+  background: var(--azul-escuro); border: var(--contorno); border-radius: 12px;
+}
+.cabecalho-pagina { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 20px; }
+.campos-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: end; } /* inputs alinhados mesmo se um rótulo quebrar */
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+:is(input, select, textarea)[aria-invalid="true"] { border-color: var(--vermelho); background: #fff5f5; }
+.selo-cat, .status { white-space: nowrap; }
+/* Texto branco com contorno preto: legível sobre qualquer cor de categoria, inclusive o amarelo. */
+.selo-cat, .chip[aria-pressed="true"] {
+  text-shadow: -1px -1px 0 var(--tinta), 1px -1px 0 var(--tinta), -1px 1px 0 var(--tinta), 1px 1px 0 var(--tinta);
+}
+
+/* ---------- Formulário + lista lado a lado (RNF01: empilha em tela estreita) ---------- */
+.crud { display: grid; grid-template-columns: minmax(300px, 430px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.crud > form { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.crud h2 { font-size: 24px; }
+.acoes-form .btn { flex: 1 1 140px; }
+.select-cat, .select-cat:focus { border-left: 14px solid var(--cor, #9aa7bb); }
+
+/* ---------- Perguntas (RF10) ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.chip {
+  font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px 6px 10px;
+  border: var(--contorno); border-radius: 999px; background: var(--papel); color: var(--tinta); box-shadow: 0 3px 0 var(--tinta);
+}
+.chip::before { content: ''; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--tinta); background: var(--cor); }
+.chip:not([style])::before { display: none; } /* "Todas" não tem cor */
+.chip b { min-width: 30px; padding: 0 6px; border: 2px solid var(--tinta); border-radius: 999px; background: var(--papel-2); color: var(--tinta); font-size: 14px; text-align: center; text-shadow: none; }
+.chip[aria-pressed="true"] { background: var(--cor, var(--amarelo)); color: #fff; transform: translateY(2px); box-shadow: 0 1px 0 var(--tinta); }
+
+.lista-itens { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.item-pergunta {
+  font: inherit; color: var(--texto); text-align: left; cursor: pointer; width: 100%;
+  display: grid; gap: 6px; padding: 12px 14px 12px 24px;
+  background: var(--papel); border: var(--contorno); border-radius: 14px;
+  box-shadow: inset 10px 0 0 var(--cor, var(--linha)), 0 4px 0 var(--tinta);
+}
+.item-pergunta:hover { background: var(--papel-2); }
+.item-pergunta[aria-pressed="true"] { background: #fff6c7; outline: 4px solid var(--amarelo-escuro); outline-offset: 0; }
+.item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; }
+.item-enunciado { font-weight: 600; overflow-wrap: anywhere; }
+.item-resposta { font-size: 15px; color: var(--texto-suave); overflow-wrap: anywhere; }
+
+.alternativas-form { margin-inline: 0; padding: 0; border: 0; }
+.alternativas-form legend { padding: 0; font-weight: 600; }
+.alternativas-form p { margin: 0 0 8px; }
+.linha-alternativa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.linha-alternativa b { flex: none; width: 1.2em; }
+.linha-alternativa input[type="text"] { flex: 1; min-width: 0; }
+.linha-alternativa input[type="radio"] { flex: none; width: 28px; height: 28px; accent-color: var(--verde); }
+.linha-alternativa select { flex: none; width: 76px; }
+.item-resposta b { color: var(--tinta); }
+
+/* ---------- Escolas (RF02) ---------- */
+.tabela-escolas td { vertical-align: middle; }
+.acoes-linha { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+tr.editando > td { background: #fff6c7; }
+
+/* ---------- Brindes ---------- */
+.regra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 20px; }
+.regra img { width: 96px; height: auto; flex: none; border: var(--contorno); border-radius: 14px; }
+.regra div { flex: 1 1 280px; }
+.regra p { margin: 0 0 8px; }
+.regra p:last-child { margin: 0; }
+.grade-brindes { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.brinde-topo { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.brinde-img { width: 112px; height: 112px; flex: none; object-fit: cover; border: var(--contorno); border-radius: 18px; box-shadow: 0 4px 0 var(--tinta); }
+.brinde-topo p { margin: 6px 0 0; }
+.brinde-qtd b { font-size: 46px; line-height: 1; }
+.selo-nivel { background: var(--amarelo); font-size: 16px; }
+.brinde .salvar { flex: 1 1 100%; }
+.brinde.esgotado { border-color: var(--vermelho); box-shadow: 0 6px 0 var(--vermelho); }
+
+/* ---------- Relatórios ---------- */
+.resumo { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-bottom: 20px; }
+.stat {
+  display: grid; align-content: start; gap: 2px; padding: 12px 16px;
+  background: var(--papel); border: var(--contorno); border-top: 10px solid var(--azul); border-radius: var(--raio); box-shadow: var(--sombra);
+}
+.stat b { font-size: 42px; line-height: 1.05; color: var(--azul-escuro); }
+.stat span { font-weight: 600; color: var(--texto-suave); }
+.stat.ok { border-top-color: var(--verde); }
+.stat.ok b { color: #1e7e34; }
+.stat.erro { border-top-color: var(--vermelho); }
+.stat.erro b { color: #b02a37; }
+.relatorio { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr)); align-items: start; }
+.relatorio .largo { grid-column: 1 / -1; }
+.col-barra { display: flex; align-items: center; gap: 8px; min-width: 170px; }
+.barra { flex: 1; height: 22px; overflow: hidden; background: var(--papel-2); border: 2px solid var(--tinta); border-radius: 999px; }
+.barra > span { display: block; height: 100%; }
+.pos { display: inline-grid; place-items: center; min-width: 38px; height: 38px; border: 2px solid var(--tinta); border-radius: 50%; background: var(--papel-2); font-weight: 700; font-size: 15px; }
+tbody tr:nth-child(1) .pos { background: var(--amarelo); }
+tbody tr:nth-child(2) .pos { background: #dfe6f2; }
+tbody tr:nth-child(3) .pos { background: #f3c79a; }
+.codigo { font-weight: 700; letter-spacing: .12em; }
+.status[data-status="Em Andamento"] { background: #1e7e34; color: #fff; }
+.status[data-status="Pausada"] { background: var(--amarelo); }
+.status[data-status="Premiação"] { background: var(--roxo); color: #fff; }
+.status[data-status="Finalizada"] { background: var(--papel-2); }
+
+@media (max-width: 900px) {
+  .crud { grid-template-columns: minmax(0, 1fr); }
+  .crud > form { position: static; max-height: none; }
+}
+/* A14 — RNF01 (sem rolagem lateral nem botão escondido; tablet em pé empilha): até 900 px, como o .crud,
+   cada linha dos Relatórios vira um cartão. Só na tela: a impressão continua em tabela. */
+@media screen and (max-width: 900px) {
+  .relatorio thead { display: none; }
+  .relatorio table, .relatorio tbody, .relatorio tr, .relatorio td { display: block; }
+  .relatorio tr { padding: 10px 0; border-bottom: 1px solid var(--linha); }
+  .relatorio td { padding: 2px 0; border: 0; text-align: left; }
+  .relatorio td[data-rotulo]::before { content: attr(data-rotulo) ": "; color: var(--texto-suave); }
+}
+@media (max-width: 600px) {
+  th, td { padding: 8px 5px; font-size: 15px; }
+  /* Escolas: cada linha vira um cartão (nome, cidade, jogadores e ações) */
+  .tabela-escolas thead { display: none; }
+  .tabela-escolas, .tabela-escolas tbody, .tabela-escolas tr, .tabela-escolas td { display: block; }
+  .tabela-escolas tr { padding: 10px 0; border-bottom: 1px solid var(--linha); }
+  .tabela-escolas td { padding: 2px 0; border: 0; text-align: left; font-size: 17px; }
+  .tabela-escolas td[data-rotulo]::before { content: attr(data-rotulo) ": "; color: var(--texto-suave); }
+  .tabela-escolas .acoes-linha { justify-content: flex-start; margin-top: 8px; }
+}
+
+@media print {
+  body { background: #fff; font-size: 12pt; }
+  #topo, #toast, #carregando, .so-tela { display: none !important; }
+  .conteudo { max-width: none; padding: 0; }
+  .titulo-pagina, .subtitulo { color: var(--tinta); text-shadow: none; }
+  .subtitulo { padding: 0; background: none; border: 0; } /* no papel não precisa do fundo escuro (A40) */
+  .cartao, .stat { box-shadow: none; }
+  .relatorio { display: block; }
+  .relatorio > .cartao { margin-bottom: 14px; }
+  .tabela-wrap { overflow: visible; }
+  h2 { break-after: avoid; }
+  tr, .stat { break-inside: avoid; }
+  .barra > span, .selo, .stat, .pos { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

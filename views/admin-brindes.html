@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brindes · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <h1 class="titulo-pagina">Brindes</h1>
+    <p class="subtitulo">Gerencie os cargos e o estoque de chaveiros: nome, cargo, pontos mínimos e quantidade (entrada de mercadoria ou ajuste após contagem).</p>
+
+    <section class="cartao regra" aria-labelledby="titulo-regra">
+      <img src="/img/adm.png" alt="" width="96" height="128">
+      <div>
+        <h2 id="titulo-regra">Como o brinde é escolhido</h2>
+        <p>Na premiação, o sistema olha a <b>pontuação total</b> de cada jogador e indica o cargo e o brinde com os <b>maiores pontos mínimos que sejam menores ou iguais</b> a essa pontuação.</p>
+        <p>Por isso cada cargo cobre uma faixa: dos seus pontos mínimos até um ponto antes dos pontos mínimos do próximo cargo. A faixa atual aparece em cada cartão.</p>
+      </div>
+    </section>
+    <div id="aviso-faixa" class="aviso aviso-erro" role="alert" hidden></div>
+
+    <div id="brindes" class="grade-brindes"></div>
+  </main>
+  <script type="module" src="/js/pages/admin-brindes.js"></script>
+</body>
+</html>

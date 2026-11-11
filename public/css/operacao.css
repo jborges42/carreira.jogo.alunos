@@ -1,0 +1,85 @@
+/* Telas de operação do mediador: Recepção, Nova Partida, Partida em Andamento, Estoque de Brindes.
+   Também carregado pela tela da partida (status, peão em miniatura, chaveiro, ESGOTADO). */
+[hidden] { display: none !important; } /* .btn/.cartao definem display e venceriam o atributo hidden */
+
+.linha-titulo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.linha-titulo .titulo-pagina { margin: 0; }
+.texto-claro { /* fundo escuro: o branco sobre o fim claro do degradê não chegava a 4,5:1 (A40) */
+  width: fit-content; padding: 8px 14px; color: #fff; font-weight: 600;
+  background: var(--azul-escuro); border: var(--contorno); border-radius: 12px;
+}
+.largo { width: 100%; }
+.nome { overflow-wrap: anywhere; }
+.codigo { font-weight: 700; letter-spacing: .12em; }
+
+/* Formulário (RF01) */
+.erro-campo:empty { display: none; }
+[aria-invalid="true"] { border-color: var(--vermelho) !important; background: #fff5f5 !important; }
+
+/* Selos de status da partida */
+.selo.status { font-size: 16px; padding: 4px 12px; white-space: nowrap; }
+.status[data-status="Em Andamento"] { background: #1e7e34; color: #fff; }
+.status[data-status="Pausada"] { background: var(--amarelo); }
+.status[data-status="Premiação"] { background: var(--roxo); color: #fff; }
+.status[data-status="Finalizada"] { background: var(--papel-2); }
+.selo-alerta { background: #fff3c4; }
+
+/* Peão em miniatura (listas e placar) */
+.peao-mini { display: inline-block; width: 28px; height: 42px; flex: none; }
+.peao-mini svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- Nova Partida (RF03) ---------- */
+.lista-busca { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow-y: auto; border: 2px solid var(--linha); border-radius: 12px; }
+.lista-busca li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--linha); }
+.lista-busca li:last-child { border-bottom: 0; }
+.lista-busca .info, .slot-topo .info { flex: 1; min-width: 0; }
+.lista-busca .selo { margin-top: 4px; }
+.selecionados { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 12px; }
+.slot { border: var(--contorno); border-radius: 14px; padding: 12px; background: var(--papel-2); }
+.slot-topo { display: flex; align-items: center; gap: 12px; }
+.slot .aviso { margin: 10px 0 0; }
+.slot-vazio { border-style: dashed; background: transparent; color: var(--texto-suave); text-align: center; font-weight: 600; padding: 16px; }
+.ordem {
+  display: grid; place-items: center; flex: none; width: 46px; height: 46px;
+  border: var(--contorno); border-radius: 50%; background: var(--amarelo); font-weight: 700; font-size: 18px;
+}
+.peoes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.opcao-peao {
+  width: 62px; height: 76px; padding: 6px; cursor: pointer;
+  border: 3px solid var(--linha); border-radius: 14px; background: #fff;
+}
+.opcao-peao svg { width: 100%; height: 100%; display: block; }
+.opcao-peao[aria-pressed="true"] { border-color: var(--tinta); background: var(--amarelo); box-shadow: 0 4px 0 var(--tinta); }
+.rotas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.rotas-rotulo { font-weight: 700; }
+.opcao-rota {
+  flex: 1 1 90px; min-height: 48px; padding: 6px 10px; cursor: pointer; font: inherit; font-weight: 600;
+  border: 3px solid var(--linha); border-radius: 14px; background: #fff; color: var(--tinta);
+}
+.opcao-rota[aria-pressed="true"] { border-color: var(--tinta); background: var(--amarelo); box-shadow: 0 4px 0 var(--tinta); }
+.btn-iniciar { width: 100%; min-height: 76px; font-size: 30px; }
+
+/* ---------- Partida em Andamento (RNF06) ---------- */
+.partida-item { display: flex; flex-direction: column; gap: 12px; }
+.partida-item h2 { margin: 0; font-size: 26px; }
+.partida-item p { margin: 0; }
+.partida-item-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.mini-placar { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mini-placar li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 12px; border-radius: 12px; background: var(--papel-2); }
+.mini-placar .nome { flex: 1 1 120px; font-weight: 600; }
+.partida-item .btn { margin-top: auto; }
+
+/* ---------- Estoque de Brindes (RF09) e premiação (RF08) ---------- */
+.chaveiro { width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: var(--contorno); background: #ddd; }
+.brinde { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.brinde h2 { margin: 6px 0 0; }
+.brinde p { margin: 0; }
+.quantidade { font-weight: 600; }
+.quantidade strong { display: block; font-size: 72px; line-height: 1; }
+.brinde.esgotado { border-color: var(--vermelho); box-shadow: 0 6px 0 var(--vermelho); }
+.brinde.esgotado .quantidade { color: var(--vermelho); }
+.alerta-esgotado {
+  width: 100%; padding: 10px; text-align: center;
+  background: var(--vermelho); color: #fff; border: var(--contorno); border-radius: 12px;
+  font-size: 26px; font-weight: 700; letter-spacing: .08em;
+}

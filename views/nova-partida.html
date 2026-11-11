@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nova Partida · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operacao.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <div class="linha-titulo">
+      <h1 class="titulo-pagina">Nova Partida</h1>
+      <a class="btn btn-pequeno" href="/partidas">Partidas em andamento</a>
+    </div>
+    <div class="grade">
+      <section class="cartao">
+        <h2>1. Escolha os jogadores</h2>
+        <div class="campo">
+          <label for="busca">Buscar jogador cadastrado</label>
+          <input type="search" id="busca" placeholder="Nome, apelido ou escola" autocomplete="off">
+        </div>
+        <ul class="lista-busca" id="resultados"><li class="vazio">Carregando…</li></ul>
+      </section>
+      <section class="cartao">
+        <h2>2. Jogadores, peões e rotas <span class="selo" id="contagem">0/4</span></h2>
+        <p class="suave">De 1 a 4 jogadores, na ordem em que vão jogar. Toque em um peão para escolher a cor e escolha por qual saída do INÍCIO cada jogador vai seguir.</p>
+        <ol class="selecionados" id="selecionados"></ol>
+        <button class="btn btn-primario btn-iniciar" id="iniciar" disabled>Iniciar</button>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/nova-partida.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recepção · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operacao.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <h1 class="titulo-pagina">Recepção</h1>
+    <div class="grade">
+      <!-- A37: sem envio nativo — onsubmit="return false" segura o Enter/Salvar enquanto o script não carregou
+           (antes ia para POST /recepcao, a página de erro); method="post": nome e e-mail nunca vão para a URL -->
+      <form class="cartao" id="form-jogador" method="post" onsubmit="return false" novalidate>
+        <h2>Cadastrar jogador</h2>
+        <div id="aviso-escolas"></div>
+        <div class="campo">
+          <label for="nome">Nome Completo <span class="obrigatorio">*</span></label>
+          <input type="text" id="nome" name="nome" autocomplete="off" autofocus aria-describedby="erro-nome">
+          <span class="erro-campo" id="erro-nome"></span>
+        </div>
+        <div class="campo">
+          <label for="apelido">Apelido</label>
+          <input type="text" id="apelido" name="apelido" autocomplete="off">
+        </div>
+        <div class="campo">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" name="email" autocomplete="off" aria-describedby="erro-email">
+          <span class="erro-campo" id="erro-email"></span>
+        </div>
+        <div class="campo">
+          <label for="escola">Escola de Origem <span class="obrigatorio">*</span></label>
+          <select id="escola" name="escola" aria-describedby="erro-escola"><option value="">Carregando escolas…</option></select>
+          <span class="erro-campo" id="erro-escola"></span>
+        </div>
+        <button class="btn btn-primario largo" type="submit">Salvar</button>
+      </form>
+      <section class="cartao">
+        <h2>Jogadores cadastrados</h2>
+        <div class="campo">
+          <label for="busca">Buscar</label>
+          <input type="search" id="busca" placeholder="Nome, apelido ou escola" autocomplete="off">
+        </div>
+        <div id="lista"><p class="vazio">Carregando…</p></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/recepcao.js"></script>
+</body>
+</html>

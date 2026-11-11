@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acompanhar partida · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/acompanhar.css">
+</head>
+<body>
+  <div id="topo"></div>
+
+  <!-- Sem código na URL: digitar o código da sessão -->
+  <main id="entrada" class="entrada" hidden>
+    <form id="form-codigo" class="cartao" novalidate>
+      <img class="logo" src="/img/logo.png" alt="Logo Carreira em Jogo">
+      <h1>Acompanhar partida</h1>
+      <div id="msg"></div>
+      <label for="codigo">Digite o código da partida</label>
+      <input type="text" id="codigo" name="codigo" placeholder="K7P2QX" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="dica-codigo">
+      <p id="dica-codigo" class="suave">São 6 letras e números. O código aparece na tela do mediador.</p>
+      <button type="submit" class="btn btn-primario">Acompanhar</button>
+    </form>
+  </main>
+
+  <!-- Com código: telão (DataShow) e consulta de pontuação -->
+  <main id="telao" class="telao" hidden>
+    <header class="telao-cab">
+      <img class="telao-logo" src="/img/logo.png" alt="">
+      <p class="telao-codigo">Partida <b id="t-codigo"></b></p>
+      <span id="t-status" class="selo status"></span>
+      <span id="t-conexao" class="selo conexao" role="status" hidden>Sem conexão · tentando de novo…</span>
+      <span class="telao-botoes">
+        <a class="btn btn-pequeno" href="/acompanhar">Trocar partida</a>
+        <button type="button" id="tela-cheia" class="btn btn-pequeno btn-azul">Tela cheia</button>
+      </span>
+    </header>
+    <div class="telao-corpo">
+      <div id="t-tabuleiro" class="telao-tabuleiro"></div>
+      <div class="telao-painel">
+        <div id="t-destaque" class="destaque-area" aria-live="polite"></div>
+        <section class="cartao placar-cartao" aria-labelledby="titulo-placar">
+          <h2 id="titulo-placar">Placar</h2>
+          <ol id="t-placar" class="placar"></ol>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/acompanhar.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Certificados · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operacao.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <h1 class="titulo-pagina">Certificados</h1>
+    <p class="texto-claro">Todos os certificados de partidas terminadas. Abra um para imprimir ou salvar em PDF: o nome do arquivo já sai com o nome e o cargo.</p>
+    <section class="cartao">
+      <div class="grade">
+        <div class="campo">
+          <label for="busca">Buscar por nome ou escola</label>
+          <input type="search" id="busca" autocomplete="off">
+        </div>
+        <div class="campo">
+          <label for="cargo">Cargo</label>
+          <select id="cargo"><option value="">Todos os cargos</option></select>
+        </div>
+      </div>
+      <p class="suave" id="total"></p>
+      <div class="tabela-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Escola</th><th>Cargo</th><th>Pontos</th><th>Data</th><th></th></tr></thead>
+          <tbody id="lista"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/pages/certificados.js"></script>
+</body>
+</html>

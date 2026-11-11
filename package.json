@@ -1,0 +1,19 @@
+{
+  "name": "carreira-em-jogo",
+  "version": "1.0.0",
+  "description": "Carreira em Jogo — jogo de tabuleiro totalmente digital (SENAI Videira / Mundo SENAI 2026)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@fontsource/fredoka": "^5.3.0",
+    "express": "^5.3.0"
+  }
+}

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatórios · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <div class="cabecalho-pagina">
+      <div>
+        <h1 class="titulo-pagina">Relatórios</h1>
+        <p class="subtitulo" id="gerado">Participação das escolas e resultados do evento.</p>
+      </div>
+      <button type="button" id="imprimir" class="btn btn-primario so-tela">Imprimir</button>
+    </div>
+    <div id="erro"></div>
+
+    <section id="resumo" class="resumo" aria-label="Resumo geral"></section>
+
+    <div class="relatorio">
+      <section class="cartao">
+        <h2>Participação por escola</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>Escola</th><th>Cidade</th><th class="num">Jogadores</th><th class="num">Partidas</th><th class="num">Pontos</th></tr></thead>
+          <tbody id="t-escolas"></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao">
+        <h2>Brindes</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>Brinde</th><th>Cargo</th><th class="num">Entregues</th><th class="num">Em estoque</th></tr></thead>
+          <tbody id="t-brindes"></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao largo">
+        <h2>Desempenho por categoria</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>Categoria</th><th class="num">Perguntas</th><th class="num">Respondidas</th><th class="num">Acertos</th><th class="num">Erros</th><th>% de acerto</th></tr></thead>
+          <tbody id="t-categorias"></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao largo">
+        <h2>Ranking (top 20)</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>#</th><th>Jogador</th><th>Escola</th><th class="num">Pontos</th><th class="num">Partidas</th><th>Melhor cargo</th></tr></thead>
+          <tbody id="t-ranking"></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao largo">
+        <h2>Partidas recentes</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>Código</th><th>Status</th><th>Início</th><th>Mediador</th><th>Jogadores</th><th>Vencedor</th><th class="so-tela">Abrir</th></tr></thead>
+          <tbody id="t-partidas"></tbody>
+        </table></div>
+      </section>
+
+      <section class="cartao largo">
+        <h2>Desempenho por jogador e categoria</h2>
+        <div class="tabela-wrap"><table>
+          <thead><tr><th>Jogador</th><th>Categoria</th><th class="num">Respondidas</th><th class="num">Acertos</th><th class="num">Erros</th><th>% de acerto</th></tr></thead>
+          <tbody id="t-jogador-categoria"></tbody>
+        </table></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin-relatorios.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perguntas · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <h1 class="titulo-pagina">Perguntas</h1>
+    <p class="subtitulo">Banco de perguntas das cartas. Clique numa pergunta da lista para carregá-la no formulário e então editar ou excluir.</p>
+    <div class="aviso aviso-alerta"><b>Edição em tempo real:</b> qualquer alteração salva aqui passa a valer imediatamente para as próximas partidas.</div>
+
+    <div class="crud">
+      <form id="form-pergunta" class="cartao" novalidate>
+        <h2 id="titulo-form">Nova pergunta</h2>
+        <div id="msg"></div>
+        <div class="campo">
+          <label for="enunciado">Enunciado da Pergunta <span class="obrigatorio">*</span></label>
+          <textarea id="enunciado" name="enunciado" rows="4" required></textarea>
+        </div>
+        <div class="campo">
+          <label for="id_categoria">Categoria <span class="obrigatorio">*</span></label>
+          <select id="id_categoria" name="id_categoria" class="select-cat" required>
+            <option value="">Selecione o tema…</option>
+          </select>
+        </div>
+        <div class="campo" id="campo-dificuldade">
+          <label for="dificuldade">Dificuldade (Fácil vale 5 pontos, Médio 10 e Difícil 15)</label>
+          <select id="dificuldade" name="dificuldade">
+            <option>Fácil</option>
+            <option selected>Médio</option>
+            <option>Difícil</option>
+          </select>
+        </div>
+        <fieldset class="campo alternativas-form">
+          <legend>Alternativas <span class="obrigatorio">*</span></legend>
+          <p class="suave" id="ajuda-alternativas"></p>
+          <div id="alternativas"></div>
+        </fieldset>
+        <div class="campo">
+          <label for="resposta">Explicação da resposta <span class="obrigatorio">*</span></label>
+          <textarea id="resposta" name="resposta" rows="3" required></textarea>
+          <p class="suave">Aparece para todos depois que o jogador responde.</p>
+        </div>
+        <div class="linha-acoes acoes-form">
+          <button type="button" id="salvar" class="btn btn-primario">Salvar (Novo)</button>
+          <button type="button" id="editar" class="btn btn-azul" disabled>Editar</button>
+          <button type="button" id="excluir" class="btn btn-perigo" disabled>Excluir</button>
+          <button type="button" id="limpar" class="btn">Limpar</button>
+        </div>
+      </form>
+
+      <section class="cartao" aria-labelledby="titulo-lista">
+        <h2 id="titulo-lista">Banco de perguntas <span id="total" class="suave"></span></h2>
+        <div class="campo">
+          <label for="busca">Buscar</label>
+          <input type="search" id="busca" placeholder="Parte do enunciado, das alternativas ou da explicação" autocomplete="off">
+        </div>
+        <div id="filtros" class="chips" role="group" aria-label="Filtrar por categoria"></div>
+        <ul id="lista" class="lista-itens"></ul>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin-perguntas.js"></script>
+</body>
+</html>

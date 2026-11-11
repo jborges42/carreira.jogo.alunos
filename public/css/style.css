@@ -1,0 +1,198 @@
+/* Carreira em Jogo — estilos base compartilhados por todas as páginas.
+   Visual inspirado no tabuleiro (fundo azul, contornos pretos grossos, amarelo) e na fonte arredondada do logo. */
+@font-face { font-family: 'Fredoka'; font-weight: 400; font-display: swap; src: url(/vendor/fredoka/files/fredoka-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-weight: 600; font-display: swap; src: url(/vendor/fredoka/files/fredoka-latin-600-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-weight: 700; font-display: swap; src: url(/vendor/fredoka/files/fredoka-latin-700-normal.woff2) format('woff2'); }
+
+:root {
+  --azul: #1f6fd1;
+  --azul-claro: #5ab4f5;
+  --azul-escuro: #0d3b7a;
+  --amarelo: #ffd93b;
+  --amarelo-escuro: #e0b400;
+  --vermelho: #dc3545;
+  --verde: #28a745;
+  --roxo: #a83de0;
+  --tinta: #16181d;
+  --texto: #1d2330;
+  --texto-suave: #5b6475;
+  --papel: #ffffff;
+  --papel-2: #f3f7fd;
+  --linha: #d5deeb;
+  --contorno: 3px solid var(--tinta);
+  --sombra: 0 6px 0 rgba(13, 59, 122, 0.35);
+  --raio: 16px;
+  /* Cores das categorias (RF05) */
+  --cat-etica: #E53935;
+  --cat-financas: #2E9E44;
+  --cat-rotinas: #1E88E5;
+  --cat-tempo: #F2C200;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--texto);
+  background: linear-gradient(160deg, var(--azul) 0%, #2f8de8 45%, var(--azul-claro) 100%) fixed;
+  overflow-x: hidden; /* RNF01: sem barra de rolagem lateral */
+}
+img { max-width: 100%; display: block; }
+h1, h2, h3 { margin: 0 0 .5em; line-height: 1.15; font-weight: 700; }
+a { color: var(--azul); }
+:focus-visible { outline: 4px solid var(--amarelo); outline-offset: 2px; }
+
+/* ---------- Topo + menu (RNF04) ---------- */
+.topo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: 10px 20px;
+  background: var(--azul-escuro);
+  border-bottom: 4px solid var(--tinta);
+  color: #fff;
+}
+.topo .marca { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 700; font-size: 22px; }
+.topo .marca img { width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--tinta); background: #fff8e6; }
+/* Duas faixas: marca + usuário em cima, menu embaixo (ocupa a largura toda e quebra linha se precisar). */
+.menu { order: 3; flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.menu a, .painel-admin > summary {
+  color: #fff; text-decoration: none; font-weight: 600; cursor: pointer;
+  padding: 10px 14px; border-radius: 12px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px;
+}
+.menu a:hover, .painel-admin > summary:hover { background: rgba(255, 255, 255, .12); }
+.menu a.ativo, .painel-admin.ativo > summary { background: var(--amarelo); color: var(--tinta); box-shadow: inset 0 -3px 0 var(--amarelo-escuro); }
+.painel-admin { position: relative; }
+.painel-admin > summary { list-style: none; background: rgba(168, 61, 224, .45); }
+.painel-admin > summary::-webkit-details-marker { display: none; }
+.painel-admin > summary::after { content: '▾'; }
+.painel-admin .submenu {
+  /* A15/RNF01: da largura do "Painel Admin" (que sempre cabe, o menu quebra linha), nunca passa da borda direita */
+  position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; min-width: 100%;
+  display: flex; flex-direction: column; gap: 4px; padding: 8px;
+  background: var(--azul-escuro); border: var(--contorno); border-radius: 14px; box-shadow: var(--sombra);
+}
+.painel-admin .submenu a { width: 100%; }
+.usuario { order: 2; margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.usuario .perfil { background: var(--amarelo); color: var(--tinta); border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: 14px; }
+
+/* ---------- Layout ---------- */
+.conteudo { max-width: 1280px; margin: 0 auto; padding: 22px 16px 60px; }
+.titulo-pagina { color: #fff; font-size: 34px; text-shadow: 0 3px 0 rgba(0, 0, 0, .25); margin-bottom: 16px; }
+@media screen { /* fundo escuro: o branco sobre o fim claro do degradê não chegava a 4,5:1 (A40/D26); na impressão, sem placa */
+  .titulo-pagina { width: fit-content; padding: 2px 16px 4px; background: var(--azul-escuro); border: var(--contorno); border-radius: 12px; }
+}
+.grade { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+.cartao {
+  background: var(--papel); border: var(--contorno); border-radius: var(--raio);
+  box-shadow: var(--sombra); padding: 20px; min-width: 0;
+}
+.cartao > h2 { font-size: 24px; }
+.suave { color: var(--texto-suave); }
+.linha-acoes { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.vazio { padding: 24px; text-align: center; color: var(--texto-suave); }
+
+/* ---------- Formulários ---------- */
+.campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.campo label { font-weight: 600; }
+.campo .obrigatorio { color: var(--vermelho); }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], select, textarea {
+  font: inherit; font-size: 18px; width: 100%;
+  padding: 12px 14px; min-height: 50px;
+  border: 2px solid #9aa7bb; border-radius: 12px; background: #fff; color: var(--texto);
+}
+textarea { min-height: 110px; resize: vertical; }
+input:focus, select:focus, textarea:focus { border-color: var(--azul); outline: 3px solid rgba(31, 111, 209, .25); }
+.erro-campo { color: var(--vermelho); font-size: 15px; font-weight: 600; }
+
+/* ---------- Botões (RNF01/RNF02: grandes, contraste alto, espaçados) ---------- */
+.btn {
+  font: inherit; font-weight: 700; font-size: 19px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 12px 22px;
+  border: var(--contorno); border-radius: 14px;
+  background: var(--papel); color: var(--tinta);
+  box-shadow: 0 5px 0 var(--tinta); text-decoration: none;
+  transition: transform .06s, box-shadow .06s;
+}
+.btn:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--tinta); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primario { background: var(--amarelo); }
+.btn-azul { background: var(--azul); color: #fff; }
+.btn-perigo { background: var(--vermelho); color: #fff; }
+.btn-pequeno { min-height: 44px; font-size: 16px; padding: 8px 14px; box-shadow: 0 3px 0 var(--tinta); }
+
+
+/* ---------- Tabelas ---------- */
+.tabela-wrap { overflow-x: auto; max-width: 100%; }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--linha); vertical-align: top; }
+th { background: var(--papel-2); font-weight: 600; }
+
+/* ---------- Selos / etiquetas ---------- */
+.selo { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 14px; font-weight: 600; border: 2px solid var(--tinta); background: #fff; }
+.selo-cat { color: #fff; }
+.selo-esgotado { background: var(--vermelho); color: #fff; }
+
+/* ---------- Avisos, toast e spinner (RNF03) ---------- */
+.aviso { border: var(--contorno); border-radius: 12px; padding: 12px 16px; font-weight: 600; margin-bottom: 16px; }
+.aviso-erro { background: #fde2e4; }
+.aviso-ok { background: #ddf6e3; }
+.aviso-alerta { background: #fff3c4; }
+#toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(150%);
+  max-width: calc(100vw - 32px); z-index: 1000;
+  background: var(--tinta); color: #fff; font-weight: 600; font-size: 19px;
+  padding: 14px 22px; border-radius: 14px; border: 3px solid #fff;
+  transition: transform .25s;
+}
+#toast.visivel { transform: translateX(-50%) translateY(0); }
+#toast.ok { background: #1e7e34; }
+#toast.erro { background: #b02a37; }
+#carregando { position: fixed; inset: 0; z-index: 999; display: none; place-items: center; background: rgba(13, 59, 122, .35); }
+#carregando.visivel { display: grid; }
+.spinner { width: 72px; height: 72px; border-radius: 50%; border: 9px solid #fff; border-top-color: var(--amarelo); animation: girar .8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------- Tabuleiro (public/js/tabuleiro.js) ---------- */
+.tabuleiro { position: relative; width: 100%; aspect-ratio: 1078 / 948; border: 4px solid var(--tinta); border-radius: 14px; overflow: hidden; background: #2b7de9; }
+.tabuleiro > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tabuleiro .peao {
+  position: absolute; width: 5.2%; transform: translate(-50%, -78%);
+  transition: left .18s linear, top .18s linear; z-index: 2;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .55));
+}
+.tabuleiro .peao svg { width: 100%; height: auto; display: block; }
+.tabuleiro .peao.da-vez { z-index: 3; animation: pular 1s ease-in-out infinite; }
+.tabuleiro .peao.eliminado { opacity: .5; filter: grayscale(1); }
+@keyframes pular { 50% { transform: translate(-50%, -92%); } }
+.tabuleiro .num-casa {
+  position: absolute; transform: translate(-50%, -50%); z-index: 1; pointer-events: none;
+  font-size: clamp(8px, 1.1vw, 13px); font-weight: 700; color: #fff; background: rgba(0, 0, 0, .62);
+  border-radius: 999px; padding: 0 4px; min-width: 1.6em; text-align: center;
+}
+.tabuleiro .destaque {
+  position: absolute; width: 6.5%; aspect-ratio: 1; transform: translate(-50%, -50%); z-index: 1;
+  border-radius: 50%; border: 4px solid #fff; box-shadow: 0 0 0 4px var(--tinta); animation: pulsar 1s ease-in-out infinite;
+}
+@keyframes pulsar { 50% { transform: translate(-50%, -50%) scale(1.25); opacity: .6; } }
+
+/* RNF01 — exemplo do documento: em tablet o botão ocupa a largura toda */
+@media (max-width: 768px) {
+  body { font-size: 17px; }
+  .botao-resposta {
+    width: 100%;     /* O botão ocupa a tela toda para facilitar o clique */
+    font-size: 20px; /* Aumenta a letra */
+  }
+  .titulo-pagina { font-size: 28px; }
+  .topo { padding: 8px 12px; gap: 6px 10px; }
+  .topo .marca span, .usuario .nome-usuario { display: none; }
+  .menu a, .painel-admin > summary { padding: 8px 11px; font-size: 16px; }
+}
+
+/* A13/RNF01 "Reorganização": tablet em pé (retrato até 1024 px) também empilha */
+@media (max-width: 768px), (orientation: portrait) and (max-width: 1024px) {
+  .grade { grid-template-columns: 1fr; }
+}

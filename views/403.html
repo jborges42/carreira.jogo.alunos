@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acesso Negado · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <section class="cartao" style="max-width:720px;margin:40px auto;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <img src="/img/adm.png" alt="Personagem ADM, o dono da partida" style="width:140px;border-radius:12px;border:var(--contorno)">
+      <div style="flex:1;min-width:240px">
+        <h1 style="color:var(--vermelho)">Acesso Negado: Você não tem permissão para visualizar esta página</h1>
+        <p class="suave">Esta área é exclusiva do perfil Administrador (Docente).</p>
+        <a class="btn btn-primario" href="/recepcao">Voltar para a Recepção</a>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    import { iniciarPagina } from '/js/app.js';
+    iniciarPagina();
+  </script>
+</body>
+</html>

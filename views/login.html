@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .login .cartao { width: min(440px, 100%); }
+    .login .logo { width: 170px; margin: -90px auto 8px; border-radius: 50%; border: var(--contorno); background: #fff8e6; box-shadow: var(--sombra); }
+    .login h1 { text-align: center; font-size: 28px; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <!-- Como na Recepção (A37/D20): onsubmit="return false" segura o Enter enquanto o script não carregou;
+         method="post": e-mail e senha nunca vão para a URL -->
+    <form class="cartao" id="form-login" method="post" onsubmit="return false" novalidate style="margin-top: 90px">
+      <img class="logo" src="/img/logo.png" alt="Logo Carreira em Jogo">
+      <h1>Entrar no sistema</h1>
+      <div id="msg"></div>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primario" style="width:100%" type="submit">Entrar</button>
+      <p class="suave" style="text-align:center;margin-bottom:0"><a href="/acompanhar">Acompanhar uma partida (telão)</a></p>
+    </form>
+  </main>
+  <script type="module">
+    import { api, esc } from '/js/app.js';
+    const form = document.getElementById('form-login');
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        await api('POST', '/api/login', { email: form.email.value, senha: form.senha.value });
+        const volta = new URLSearchParams(location.search).get('volta');
+        // A25: só volta para caminho deste site (começa com uma barra, não com // nem /\, sem barra invertida, espaço, tab ou quebra de linha).
+        location.href = /^\/(?![\/\\])[^\s\\]*$/.test(volta) ? volta : '/recepcao';
+      } catch (e) {
+        document.getElementById('msg').innerHTML = `<div class="aviso aviso-erro">${esc(e.message)}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

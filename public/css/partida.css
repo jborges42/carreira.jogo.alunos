@@ -1,0 +1,182 @@
+/* Tela da partida (/partida/:id) — RF04 a RF09, RNF01 a RNF03, RNF06. */
+.conteudo.partida { max-width: 1440px; }
+body.sem-rolagem { overflow: hidden; }
+.aviso-pagina { max-width: 640px; margin: 40px auto; text-align: center; }
+
+/* ---------- Cabeçalho: código da sessão, cronômetro, pausar/encerrar ---------- */
+.cab-partida { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.cab-partida .titulo-pagina { margin: 0; font-size: 28px; }
+.cab-partida .selo.status { padding: 5px 12px; border-width: 3px; }
+.chip {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%;
+  min-height: 52px; padding: 4px 6px 4px 14px; font-size: 16px; font-weight: 600;
+  background: #fff; border: var(--contorno); border-radius: 999px; box-shadow: 0 4px 0 var(--tinta);
+}
+.chip .codigo { font-size: 22px; }
+.chip.cronometro { padding-right: 16px; }
+#cronometro { font-size: 26px; font-variant-numeric: tabular-nums; }
+.cab-acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; }
+
+/* ---------- Grade: tabuleiro ≈ 60% à esquerda, painel à direita (RNF01) ---------- */
+.jogo {
+  display: grid; gap: 20px; align-items: start;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "tab etapa" "tab placar" "tab admin";
+}
+.jogo.fim { grid-template-areas: "etapa etapa" "tab placar" "tab admin"; } /* premiação em largura total */
+.area-tabuleiro { grid-area: tab; }
+.etapa { grid-area: etapa; }
+.placar { grid-area: placar; }
+.admin-partida { grid-area: admin; }
+.alternador { /* fundo escuro: o branco sobre o fim claro do degradê não chegava a 4,5:1 (A40) */
+  display: inline-flex; align-items: center; gap: 10px; min-height: 48px; margin-top: 8px; padding: 0 16px 0 10px;
+  color: #fff; font-weight: 600; cursor: pointer; background: var(--azul-escuro); border: var(--contorno); border-radius: 999px;
+}
+.alternador input { width: 26px; height: 26px; accent-color: var(--amarelo); }
+
+/* ---------- Etapa: vez, dado, sortear, pausada ---------- */
+.vez {
+  display: flex; align-items: center; gap: 14px; padding: 10px 16px; margin-bottom: 14px;
+  background: var(--papel-2); border: var(--contorno); border-left: 18px solid var(--peao); border-radius: 14px;
+}
+.vez svg { width: 48px; height: 72px; flex: none; animation: quicar 1.2s ease-in-out infinite; }
+@keyframes quicar { 50% { transform: translateY(-6px); } }
+.vez-rotulo { display: block; font-size: 18px; font-weight: 600; color: var(--texto-suave); }
+.vez-nome { display: block; font-size: clamp(26px, 2.4vw, 38px); line-height: 1.1; overflow-wrap: anywhere; }
+.vez-apelido { font-size: 18px; color: var(--texto-suave); }
+.feedback { font-size: 20px; animation: surgir .45s ease-out; }
+@keyframes surgir { from { opacity: 0; transform: scale(.92); } }
+@media (prefers-reduced-motion: reduce) { .vez svg, .feedback, .num-dado { animation: none; } }
+.explicacao { display: block; margin-top: 6px; font-size: 17px; font-weight: 500; }
+.btn.girando { animation: sacudir .18s linear infinite; font-variant-numeric: tabular-nums; }
+.btn.girando:disabled { opacity: 1; }
+@keyframes sacudir { 25% { transform: rotate(-1.5deg); } 75% { transform: rotate(1.5deg); } }
+.movimento { font-size: 22px; margin: 0 0 12px; }
+.num-dado {
+  display: inline-grid; place-items: center; min-width: 1.7em; height: 1.7em;
+  border: var(--contorno); border-radius: 10px; background: #fff; font-weight: 700; box-shadow: 0 3px 0 var(--tinta);
+  animation: surgir .45s ease-out;
+}
+.casa-info {
+  display: flex; align-items: center; gap: 14px; padding: 12px 14px; margin-bottom: 16px;
+  background: var(--papel-2); border: var(--contorno); border-radius: 14px; font-size: 19px;
+}
+.amostra { width: 54px; height: 54px; flex: none; border: var(--contorno); border-radius: 12px; }
+.btn-grande { width: 100%; min-height: 80px; font-size: 26px; }
+.btn-sortear img { width: 46px; height: 58px; object-fit: cover; border: 2px solid var(--tinta); border-radius: 6px; }
+.pausada {
+  display: grid; gap: 10px; padding: 18px; margin-bottom: 14px; text-align: center;
+  border: var(--contorno); border-radius: 14px;
+  background: repeating-linear-gradient(-45deg, #fff3c4 0 18px, #ffe58a 18px 36px);
+}
+.pausada strong { font-size: 34px; }
+.titulo-etapa {
+  display: inline-block; padding: 4px 18px; font-size: 30px;
+  background: var(--amarelo); border: var(--contorno); border-radius: 12px; box-shadow: 0 4px 0 var(--tinta);
+}
+
+/* ---------- Placar ---------- */
+.lista-placar { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lista-placar li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 12px;
+  border: 2px solid var(--linha); border-radius: 12px;
+}
+.lista-placar .nome { flex: 1 1 140px; min-width: 0; font-weight: 600; }
+.lista-placar .da-vez { background: var(--amarelo); border: var(--contorno); box-shadow: 0 4px 0 var(--tinta); }
+.lista-placar .inativo { opacity: .55; }
+.pontos b { font-size: 22px; }
+
+/* ---------- Painel do administrador ---------- */
+.admin-partida summary { display: flex; align-items: center; min-height: 48px; font-size: 20px; font-weight: 700; cursor: pointer; }
+.admin-partida[open] summary { margin-bottom: 12px; }
+.admin-partida p { margin-bottom: 0; }
+
+/* ---------- Premiação (RF08/RF09) ---------- */
+.premios { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+.premio {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; text-align: center;
+  background: var(--papel-2); border: var(--contorno); border-radius: 16px;
+}
+.premio p { margin: 0; }
+.premio-jogador { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 600; }
+.casa-final { font-size: 30px; }
+.rotulo-cargo { font-size: 15px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--texto-suave); }
+.premio .cargo { padding: 2px 16px; font-size: 30px; font-weight: 700; line-height: 1.15; background: var(--amarelo); border: var(--contorno); border-radius: 12px; }
+.nivel { font-size: 18px; font-weight: 600; }
+.selo-eliminado { background: var(--tinta); color: #fff; }
+.premio .btn, .entregue-ok { width: 100%; margin-top: auto; }
+.premio.entregue { background: #ddf6e3; }
+.premio.esgotado { border-color: var(--vermelho); }
+.entregue-ok {
+  padding: 12px; background: #1e7e34; color: #fff;
+  border: var(--contorno); border-radius: 12px; font-size: 22px; font-weight: 700;
+}
+
+/* ---------- Finalizada: ranking da partida ---------- */
+.ranking { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; }
+.ranking li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px;
+  background: var(--papel-2); border: var(--contorno); border-radius: 14px; font-size: 20px;
+}
+.ranking .primeiro { background: var(--amarelo); box-shadow: 0 5px 0 var(--tinta); }
+.ranking .nome { flex: 1 1 160px; font-weight: 600; }
+.ranking .cargo { font-weight: 700; }
+.pos { min-width: 2em; font-size: 28px; font-weight: 700; }
+
+/* ---------- Pergunta em tela cheia (RF05, RF07, RNF02) ---------- */
+.sobreposicao {
+  position: fixed; inset: 0; z-index: 900; /* abaixo do spinner (999) e do toast (1000) */
+  display: flex; flex-direction: column; gap: clamp(14px, 2.4vh, 26px);
+  overflow-y: auto; overscroll-behavior: contain; padding: clamp(16px, 3vw, 40px);
+  background: var(--cat, var(--azul)); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .35);
+}
+.sobreposicao:focus, .pergunta-conteudo:focus { outline: none; }
+/* RF05 (A1): enunciado e alternativas rolam juntos, então nenhuma alternativa fica inalcançável.
+   margin -8px + padding 8px: folga para a sombra dos botões e o contorno de foco sem mudar a posição do conteúdo. */
+.pergunta-conteudo {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: -8px; padding: 8px;
+  display: flex; flex-direction: column; gap: inherit;
+}
+.sobreposicao.escuro { color: var(--tinta); text-shadow: none; } /* amarelo: texto escuro */
+.sobreposicao .btn, .pergunta-categoria { text-shadow: none; }
+.pergunta-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.pergunta-categoria {
+  padding: 6px 18px; font-size: 24px; font-weight: 700; color: var(--tinta);
+  background: #fff; border: var(--contorno); border-radius: 999px; box-shadow: 0 4px 0 var(--tinta);
+}
+.pergunta-meta { flex: 1 1 260px; font-size: 20px; font-weight: 600; }
+.enunciado { /* RNF02: a maior fonte da tela */
+  margin: auto 0; align-self: center; max-width: 1200px; text-align: center;
+  font-size: clamp(30px, 3vw + 2vh, 64px); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere;
+}
+/* RNF02: bem abaixo do enunciado, que continua a maior fonte da tela */
+.alternativas {
+  align-self: center; display: grid; gap: 14px; width: 100%; max-width: 1200px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.alternativa {
+  display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 10px 16px; text-align: left;
+  font-size: clamp(20px, 1vw + 12px, 26px); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere;
+  color: var(--tinta); background: #fff;
+}
+.alternativa .letra {
+  display: grid; place-items: center; flex: none; width: 1.9em; height: 1.9em;
+  background: var(--amarelo); border: var(--contorno); border-radius: 50%;
+}
+
+/* ---------- Tela estreita ou tablet em pé (retrato até 1024 px, A13): tudo empilhado (RNF01) ---------- */
+@media (max-width: 768px), (orientation: portrait) and (max-width: 1024px) {
+  .jogo, .jogo.fim {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
+    grid-template-areas: "etapa" "tab" "placar" "admin";
+  }
+}
+/* ---------- Tela estreita: botões em largura total (RNF01) ---------- */
+@media (max-width: 768px) {
+  .cab-acoes { flex: 1 1 300px; margin-left: 0; }
+  .cab-acoes .btn { flex: 1; }
+  .admin-partida .btn { flex: 1 1 100%; }
+  .alternativas { grid-template-columns: minmax(0, 1fr); } /* RNF01: alternativas em largura total */
+  .movimento { font-size: 20px; }
+}

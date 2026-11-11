@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Escolas · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <h1 class="titulo-pagina">Escolas</h1>
+    <p class="subtitulo">Cadastro prévio das escolas visitantes. Na Recepção, o mediador só escolhe a escola nesta lista.</p>
+
+    <div class="crud">
+      <form id="form-escola" class="cartao" novalidate>
+        <h2 id="titulo-form">Nova escola</h2>
+        <div id="msg"></div>
+        <div class="campo">
+          <label for="nome">Nome da Escola <span class="obrigatorio">*</span></label>
+          <input type="text" id="nome" name="nome" autocomplete="off" required>
+        </div>
+        <div class="campo">
+          <label for="cidade">Cidade <span class="obrigatorio">*</span></label>
+          <input type="text" id="cidade" name="cidade" autocomplete="off" required>
+        </div>
+        <div class="linha-acoes acoes-form">
+          <button type="submit" id="salvar" class="btn btn-primario">Salvar</button>
+          <button type="button" id="cancelar" class="btn" hidden>Cancelar edição</button>
+        </div>
+      </form>
+
+      <section class="cartao" aria-labelledby="titulo-lista">
+        <h2 id="titulo-lista">Escolas cadastradas</h2>
+        <p id="resumo" class="suave"></p>
+        <div class="tabela-wrap">
+          <table class="tabela-escolas">
+            <thead><tr><th>Escola</th><th>Cidade</th><th class="num">Jogadores</th><th class="num">Ações</th></tr></thead>
+            <tbody id="escolas"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin-escolas.js"></script>
+</body>
+</html>

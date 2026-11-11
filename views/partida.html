@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Partida · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operacao.css">
+  <link rel="stylesheet" href="/css/partida.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo partida" id="partida">
+    <header class="cab-partida" id="cab"></header>
+    <div class="jogo" id="jogo">
+      <section class="area-tabuleiro" aria-label="Tabuleiro">
+        <div id="tabuleiro"></div>
+        <label class="alternador"><input type="checkbox" id="numeros"> Mostrar números das casas</label>
+      </section>
+      <section class="cartao etapa" id="etapa" aria-live="polite"><p class="vazio">Carregando partida…</p></section>
+      <section class="cartao placar" aria-labelledby="titulo-placar">
+        <h2 id="titulo-placar">Placar</h2>
+        <ol class="lista-placar" id="placar"></ol>
+      </section>
+      <details class="cartao admin-partida" id="admin" hidden>
+        <summary>Gerenciar partida (Administrador)</summary>
+        <div class="campo">
+          <label for="adm-jogador">Jogador</label>
+          <select id="adm-jogador"></select>
+        </div>
+        <div class="campo">
+          <label for="adm-casa">Casa de destino</label>
+          <input type="number" id="adm-casa" min="0" step="1" inputmode="numeric">
+        </div>
+        <div class="linha-acoes">
+          <button class="btn btn-azul" data-acao="mover">Mover peão</button>
+          <button class="btn btn-perigo" data-acao="remover">Remover jogador</button>
+        </div>
+        <p class="suave" id="adm-dica"></p>
+      </details>
+    </div>
+  </main>
+  <div class="sobreposicao" id="pergunta" role="dialog" aria-modal="true" aria-labelledby="enunciado" tabindex="-1" hidden></div>
+  <script type="module" src="/js/pages/partida.js"></script>
+</body>
+</html>

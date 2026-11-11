@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Certificado · Carreira em Jogo</title>
+  <link rel="icon" href="/img/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/operacao.css">
+  <link rel="stylesheet" href="/css/certificado.css">
+</head>
+<body>
+  <div id="topo"></div>
+  <main class="conteudo">
+    <div class="acoes-certificado linha-acoes" id="acoes" hidden>
+      <button class="btn btn-primario" id="imprimir" type="button">Imprimir ou salvar em PDF</button>
+      <a class="btn" id="envio" hidden>Enviar por e-mail</a>
+    </div>
+    <div id="erro"></div>
+    <article class="certificado" id="certificado" hidden>
+      <header class="certificado-logos">
+        <!-- Logo oficial: coloque o arquivo em public/img/logo-senai.png. Sem ele, sai o nome da instituição em texto. -->
+        <img src="/img/logo-senai.png" alt="SENAI" onerror="this.hidden = true; this.nextElementSibling.hidden = false">
+        <strong class="senai-texto" hidden>SENAI</strong>
+        <img src="/img/logo.png" alt="Carreira em Jogo">
+      </header>
+      <h1>Certificado de Participação</h1>
+      <p>Certificamos que</p>
+      <p class="certificado-nome" id="c-nome"></p>
+      <p>da escola <b id="c-escola"></b> participou do <b>Carreira em Jogo</b> no Mundo SENAI 2026 e alcançou o cargo de</p>
+      <p class="certificado-cargo" id="c-cargo"></p>
+      <p>com <b id="c-pontos"></b> pontos.</p>
+      <footer><span id="c-local"></span><span>Prof. Carlos Alexandre dos Santos · Docente responsável</span></footer>
+    </article>
+  </main>
+  <script type="module" src="/js/pages/certificado.js"></script>
+</body>
+</html>
