@@ -13,7 +13,17 @@ npm test
 | Administrador (docente) | professor@senai.com.br | admin123 |
 | Mediador (aluno) | mediador@senai.com.br | mediador123 |
 
-Requer Node.js 22.13 ou superior (usa o SQLite embutido `node:sqlite`). O banco `data/carreira.db` é criado e populado só na primeira execução (o que o administrador excluir não volta ao reiniciar); para recomeçar do zero, pare o servidor e apague `data/carreira.db*`.
+Requer Node.js 22.13 ou superior. O banco local é o arquivo SQLite `data/carreira.db` (aberto pelo libSQL), criado e populado só na primeira execução (o que o administrador excluir não volta ao reiniciar); para recomeçar do zero, pare o servidor e apague `data/carreira.db*`.
+
+## Na Vercel
+
+Na Vercel o disco da função é só leitura e não guarda nada entre execuções, então o banco é um **Turso** (SQLite na nuvem), escolhido pelas variáveis `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN`. Sem elas, o servidor usa o arquivo local.
+
+1. No projeto da Vercel, abra **Storage → Create Database → Turso** e escolha a região **AWS US East 1**. Depois conecte o banco ao projeto; isso cria as duas variáveis.
+2. Em **Settings → Environment Variables**, crie `SENHA_ADMIN` e `SENHA_MEDIADOR`. Na Vercel elas são obrigatórias, porque este README é público e mostra as senhas padrão. Elas só valem na criação do banco, que acontece no primeiro acesso.
+3. Faça o **Redeploy**.
+
+A função roda em `iad1` (`vercel.json`), ao lado do banco: cada tela faz várias consultas, e o Turso não tem região na América do Sul. As fontes ficam em `public/`, porque a Vercel serve essa pasta pela CDN e ignora o `express.static`.
 
 ## Ao rodar a fase 2
 

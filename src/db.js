@@ -1,29 +1,60 @@
-// Banco de dados SQLite (node:sqlite, embutido no Node >= 22.13).
+// Banco de dados SQLite pelo libSQL (@libsql/client): o arquivo data/carreira.db no servidor local ou, na Vercel, um
+// banco Turso (TURSO_DATABASE_URL + TURSO_AUTH_TOKEN) — lá o disco da função é só leitura e não guarda nada entre execuções.
 // Schema = união do documento de Requisitos Funcionais (tabelas TB_*) com o Modelo Lógico
 // (JOGADOR_PARTIDA, CATEGORIA, CASA_TABULEIRO, CARGO...). Ver docs/DOCUMENTACAO-CONSOLIDADA.md §7.
-import { DatabaseSync } from 'node:sqlite';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hashSenha } from './senha.js';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DB_PATH = process.env.DB_PATH || join(RAIZ, 'data', 'carreira.db');
-if (DB_PATH !== ':memory:') mkdirSync(dirname(DB_PATH), { recursive: true });
+const remoto = Boolean(process.env.TURSO_DATABASE_URL);
+if (!remoto && process.env.VERCEL) {
+  throw new Error('Na Vercel o banco é o Turso: conecte um banco Turso ao projeto (Storage) para criar TURSO_DATABASE_URL e TURSO_AUTH_TOKEN, e faça o redeploy.');
+}
+const naMemoria = DB_PATH === ':memory:'; // testes
+if (!remoto && !naMemoria) mkdirSync(dirname(DB_PATH), { recursive: true });
+// O cliente web (só fetch, sem módulo nativo) é o indicado pelo Turso para a Vercel; o de Node abre o arquivo local.
+const { createClient } = await import(remoto ? '@libsql/client/web' : '@libsql/client');
+const cliente = createClient(remoto
+  ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
+  : { url: naMemoria ? ':memory:' : pathToFileURL(DB_PATH).href });
 
-export const db = new DatabaseSync(DB_PATH);
+// Dentro de transacao(), as consultas vão para a transação da própria requisição: com o Turso, outras requisições
+// rodam ao mesmo tempo na mesma instância e não podem cair nela.
+const emTransacao = new AsyncLocalStorage();
+const conexao = () => emTransacao.getStore() ?? cliente;
+// NaN (de inteiro() inválido) vira NULL, como fazia o node:sqlite — o libSQL recusa NaN.
+const valores = (args) => args.map((v) => (Number.isNaN(v) ? null : v));
+const executar = (sql, args) => conexao().execute({ sql, args: valores(args) });
+
+export const db = {
+  get: async (sql, ...args) => (await executar(sql, args)).rows[0],
+  all: async (sql, ...args) => (await executar(sql, args)).rows,
+  run: async (sql, ...args) => {
+    const r = await executar(sql, args);
+    return { changes: r.rowsAffected, lastInsertRowid: Number(r.lastInsertRowid) };
+  },
+  // Vários comandos numa ida só ao banco (com o Turso, cada consulta é uma ida pela rede); atômico fora de transacao()
+  lote: (comandos) => conexao().batch(comandos.map(({ sql, args = [] }) => ({ sql, args: valores(args) }))),
+  exec: (sql) => cliente.executeMultiple(sql),
+  close: () => cliente.close(),
+};
+
 // A fase 2 mudou o schema sem migração (o banco da fase 1 só tinha dados de teste). O banco antigo é recusado antes
 // de qualquer CREATE; a coluna identifica a versão porque banco novo e banco muito antigo têm o mesmo user_version.
-if (db.prepare("SELECT 1 FROM pragma_table_info('TB_BRINDE') WHERE name = 'casa_minima'").get()) {
+// Só existe banco da fase 1 em arquivo local.
+if (!remoto && await db.get("SELECT 1 FROM pragma_table_info('TB_BRINDE') WHERE name = 'casa_minima'")) {
   db.close();
   throw new Error(`${DB_PATH} é da fase 1 e não é migrado. Pare o servidor, guarde esse arquivo em outra pasta (com -wal e -shm, se existirem) e inicie de novo.`);
 }
-db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
-// A27: busca que ignora acentos e maiúsculas, inclusive acentuadas (o LIKE do SQLite só cobre ASCII).
-// Mesma normalização do filtro da tela /admin/perguntas.
-db.function('sem_acento', { deterministic: true }, (s) => (s == null ? null : String(s).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()));
+if (!remoto) await db.exec('PRAGMA journal_mode = WAL;');
+// Chaves estrangeiras: o libSQL local as confere sempre; o Turso, não (vem desligado e vale por conexão). Por isso o
+// único efeito de que o app depende — o ON DELETE da exclusão de pergunta — é feito também no código (api.js).
 
-db.exec(`
+await db.exec(`
 CREATE TABLE IF NOT EXISTS TB_USUARIO (
   id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
   nome       TEXT NOT NULL,
@@ -143,7 +174,7 @@ CREATE TABLE IF NOT EXISTS TB_ENTREGA_BRINDE (        -- RF08 (+ id_partida p/ "
 );
 `);
 
-const vazio = (t) => db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n === 0;
+const vazio = async (t) => (await db.get(`SELECT COUNT(*) n FROM ${t}`)).n === 0;
 const json = (arq) => JSON.parse(readFileSync(join(RAIZ, 'data', arq), 'utf8'));
 
 export const ROTAS = json('tabuleiro.json').rotas; // sequência de casas de cada rota, do INÍCIO ao Chegou!
@@ -171,59 +202,62 @@ const CARGOS = [
 ];
 
 // Pontos de cada alternativa: a correta vale pela dificuldade; na Entrevista, cada uma tem a sua nota.
-export function gravarAlternativas(idPergunta, { alternativas, correta, notas, dificuldade }) {
-  db.prepare('DELETE FROM TB_ALTERNATIVA WHERE id_pergunta = ?').run(idPergunta);
-  const ins = db.prepare('INSERT INTO TB_ALTERNATIVA (id_pergunta, letra, texto, pontos) VALUES (?, ?, ?, ?)');
-  LETRAS.forEach((letra, i) => ins.run(idPergunta, letra, alternativas[i], notas ? notas[i] : letra === correta ? PONTOS_DA_DIFICULDADE[dificuldade] : 0));
-}
+const sqlAlternativas = (idPergunta, { alternativas, correta, notas, dificuldade }) => [
+  { sql: 'DELETE FROM TB_ALTERNATIVA WHERE id_pergunta = ?', args: [idPergunta] },
+  ...LETRAS.map((letra, i) => ({
+    sql: 'INSERT INTO TB_ALTERNATIVA (id_pergunta, letra, texto, pontos) VALUES (?, ?, ?, ?)',
+    args: [idPergunta, letra, alternativas[i], notas ? notas[i] : letra === correta ? PONTOS_DA_DIFICULDADE[dificuldade] : 0],
+  })),
+];
+export const gravarAlternativas = (idPergunta, dados) => db.lote(sqlAlternativas(idPergunta, dados));
 
-db.exec('BEGIN');
-try {
-  // A6: seeds só na criação do banco ("populado na 1ª execução"): excluir todas as perguntas ou escolas
-  // não as traz de volta no próximo início. Os testes vazio() ficam para os bancos antigos (user_version 0 já populados).
-  if (db.prepare('PRAGMA user_version').get().user_version === 0) {
-    if (vazio('TB_USUARIO')) {
-      const ins = db.prepare('INSERT INTO TB_USUARIO (nome, email, senha, perfil) VALUES (?, ?, ?, ?)');
-      ins.run('Prof. Carlos Alexandre dos Santos', 'professor@senai.com.br', hashSenha(process.env.SENHA_ADMIN || 'admin123'), 'Administrador');
-      ins.run('Aprendiz Mediador', 'mediador@senai.com.br', hashSenha(process.env.SENHA_MEDIADOR || 'mediador123'), 'Mediador');
-    }
-    if (vazio('TB_ESCOLA')) db.prepare('INSERT INTO TB_ESCOLA (nome, cidade) VALUES (?, ?)').run('SENAI Videira', 'Videira');
-    if (vazio('TB_CATEGORIA')) {
-      const ins = db.prepare('INSERT INTO TB_CATEGORIA (id_categoria, nome, cor, cor_hex, mecanica) VALUES (?, ?, ?, ?, ?)');
-      for (const c of CATEGORIAS) ins.run(...c);
-    }
-    if (vazio('TB_CASA')) {
-      const ins = db.prepare('INSERT INTO TB_CASA (numero, tipo, cor, icone, id_categoria, x, y) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      for (const c of json('tabuleiro.json').casas) ins.run(c.numero, c.tipo, c.cor, c.icone, CATEGORIA_DA_COR[c.cor] ?? null, c.x, c.y);
-    }
-    if (vazio('TB_BRINDE')) {
-      const ins = db.prepare('INSERT INTO TB_BRINDE (nome, cargo, pontos_minimos, quantidade_estoque) VALUES (?, ?, ?, ?)');
-      for (const [cargo, pontos, estoque] of CARGOS) ins.run(`Chaveiro ${cargo}`, cargo, pontos, estoque);
-    }
-    if (vazio('TB_PERGUNTA') && existsSync(join(RAIZ, 'data', 'perguntas.json'))) {
-      const ins = db.prepare('INSERT INTO TB_PERGUNTA (enunciado, resposta, id_categoria, dificuldade) VALUES (?, ?, ?, ?)');
-      for (const p of json('perguntas.json')) {
-        const dificuldade = p.dificuldade || 'Médio';
-        gravarAlternativas(ins.run(p.enunciado, p.resposta, p.id_categoria, dificuldade).lastInsertRowid, { ...p, dificuldade });
-      }
-    }
-    db.exec('PRAGMA user_version = 1'); // na mesma transação: um erro no seed desfaz também a versão
-  }
-  db.exec('COMMIT');
-} catch (e) {
-  db.exec('ROLLBACK');
-  throw e;
-}
-
-// Executa fn dentro de uma transação (RNF06: cada passo gravado de forma atômica).
-export function transacao(fn) {
-  db.exec('BEGIN IMMEDIATE');
+// Executa fn numa transação de escrita (RNF06: cada passo gravado de forma atômica).
+export async function transacao(fn) {
+  const tx = await cliente.transaction('write');
   try {
-    const r = fn();
-    db.exec('COMMIT');
+    const r = await emTransacao.run(tx, fn);
+    await tx.commit();
     return r;
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
+  } finally {
+    tx.close(); // sem o commit (erro em fn), desfaz tudo
   }
 }
+
+// A6: seeds só na criação do banco ("populado na 1ª execução"): excluir todas as perguntas ou escolas
+// não as traz de volta no próximo início. Os testes vazio() ficam para os bancos antigos (user_version 0 já populados).
+// Numa transação de escrita e numa ida só ao banco: duas instâncias da Vercel subindo juntas não semeiam duas vezes.
+await transacao(async () => {
+  if ((await db.get('PRAGMA user_version')).user_version !== 0) return;
+  const lote = [];
+  const inserir = (sql, ...linhas) => linhas.forEach((args) => lote.push({ sql, args }));
+  if (await vazio('TB_USUARIO')) {
+    // Na Vercel o site é público e o README (também público) mostra as senhas padrão: lá elas são obrigatórias.
+    if (remoto && !(process.env.SENHA_ADMIN && process.env.SENHA_MEDIADOR)) {
+      throw new Error('Defina SENHA_ADMIN e SENHA_MEDIADOR nas variáveis de ambiente antes do primeiro acesso: as senhas padrão estão no README público.');
+    }
+    inserir('INSERT INTO TB_USUARIO (nome, email, senha, perfil) VALUES (?, ?, ?, ?)',
+      ['Prof. Carlos Alexandre dos Santos', 'professor@senai.com.br', hashSenha(process.env.SENHA_ADMIN || 'admin123'), 'Administrador'],
+      ['Aprendiz Mediador', 'mediador@senai.com.br', hashSenha(process.env.SENHA_MEDIADOR || 'mediador123'), 'Mediador']);
+  }
+  if (await vazio('TB_ESCOLA')) inserir('INSERT INTO TB_ESCOLA (nome, cidade) VALUES (?, ?)', ['SENAI Videira', 'Videira']);
+  if (await vazio('TB_CATEGORIA')) inserir('INSERT INTO TB_CATEGORIA (id_categoria, nome, cor, cor_hex, mecanica) VALUES (?, ?, ?, ?, ?)', ...CATEGORIAS);
+  if (await vazio('TB_CASA')) {
+    inserir('INSERT INTO TB_CASA (numero, tipo, cor, icone, id_categoria, x, y) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ...json('tabuleiro.json').casas.map((c) => [c.numero, c.tipo, c.cor, c.icone, CATEGORIA_DA_COR[c.cor] ?? null, c.x, c.y]));
+  }
+  if (await vazio('TB_BRINDE')) {
+    inserir('INSERT INTO TB_BRINDE (nome, cargo, pontos_minimos, quantidade_estoque) VALUES (?, ?, ?, ?)',
+      ...CARGOS.map(([cargo, pontos, estoque]) => [`Chaveiro ${cargo}`, cargo, pontos, estoque]));
+  }
+  if (await vazio('TB_PERGUNTA') && existsSync(join(RAIZ, 'data', 'perguntas.json'))) {
+    // Tabela vazia: os ids 1, 2, 3... estão livres e ligam cada pergunta às suas alternativas dentro do mesmo lote
+    json('perguntas.json').forEach((p, i) => {
+      const dificuldade = p.dificuldade || 'Médio';
+      inserir('INSERT INTO TB_PERGUNTA (id_pergunta, enunciado, resposta, id_categoria, dificuldade) VALUES (?, ?, ?, ?, ?)',
+        [i + 1, p.enunciado, p.resposta, p.id_categoria, dificuldade]);
+      lote.push(...sqlAlternativas(i + 1, { ...p, dificuldade }));
+    });
+  }
+  lote.push({ sql: 'PRAGMA user_version = 1' }); // na mesma transação: um erro no seed desfaz também a versão
+  await db.lote(lote);
+});

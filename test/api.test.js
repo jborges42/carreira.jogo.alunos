@@ -21,7 +21,10 @@ const { sorteio } = await import('../src/jogo.js'); // o mesmo módulo do servid
 
 const servidor = app.listen(0, '127.0.0.1');
 await new Promise((pronto) => servidor.once('listening', pronto));
-after(() => servidor.close());
+after(() => {
+  servidor.close();
+  db.close();
+});
 const BASE = `http://127.0.0.1:${servidor.address().port}`;
 
 async function chamar(sid, metodo, url, corpo, cabecalhos = {}) {
@@ -66,8 +69,8 @@ let escola, ana, beto, caio, duda, eva, fabio, p1;
 const ALTERNATIVAS = ['Primeira', 'Segunda opção', 'Terceira opção', 'Quarta opção dada'];
 const nova = (extra) => ({ enunciado: 'Teste?', resposta: 'Porque sim.', id_categoria: 1, alternativas: ALTERNATIVAS, correta: 'B', ...extra });
 // O estado das telas não entrega a correção antes da resposta: os testes a consultam direto no banco.
-const letraCerta = (idPergunta) => db.prepare('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? ORDER BY pontos DESC LIMIT 1').get(idPergunta).letra;
-const letraErrada = (idPergunta) => db.prepare('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? AND pontos = 0 LIMIT 1').get(idPergunta).letra;
+const letraCerta = async (idPergunta) => (await db.get('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? ORDER BY pontos DESC LIMIT 1', idPergunta)).letra;
+const letraErrada = async (idPergunta) => (await db.get('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? AND pontos = 0 LIMIT 1', idPergunta)).letra;
 // Partida de teste + atalho que põe o peão na casa e joga o dado
 async function partida(jogadores) {
   const e = ok(await M('POST', '/api/partidas', { jogadores }), 201);
@@ -171,12 +174,12 @@ test('RF10: perguntas (admin) — inserir, editar, excluir e filtrar', async () 
   // A27: "é" gravado é achado digitando "E" (sem acento e em maiúscula)
   assert.deepEqual(ok(await A('GET', `/api/perguntas?q=${encodeURIComponent('ZXQ: O QUE E A CLT')}`)).map((x) => x.id_pergunta), [p.id_pergunta]);
   const e = ok(await A('PUT', `/api/perguntas/${p.id_pergunta}`, nova({ enunciado: 'Zxq: o que significa a sigla CLT?', resposta: p.resposta, id_categoria: 3, correta: 'D' })));
-  assert.deepEqual([e.enunciado, e.dificuldade, e.pontos, letraCerta(p.id_pergunta)], ['Zxq: o que significa a sigla CLT?', 'Fácil', 5, 'D']); // dificuldade omitida fica como estava
+  assert.deepEqual([e.enunciado, e.dificuldade, e.pontos, await letraCerta(p.id_pergunta)], ['Zxq: o que significa a sigla CLT?', 'Fácil', 5, 'D']); // dificuldade omitida fica como estava
   falha(await A('PUT', '/api/perguntas/99999', nova()), 404);
   const tmp = ok(await A('POST', '/api/perguntas', nova({ enunciado: 'Temporária?' })), 201);
   ok(await A('DELETE', `/api/perguntas/${tmp.id_pergunta}`), 204);
   falha(await A('DELETE', `/api/perguntas/${tmp.id_pergunta}`), 404);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM TB_ALTERNATIVA WHERE id_pergunta = ?').get(tmp.id_pergunta).n, 0); // saem junto com a pergunta
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM TB_ALTERNATIVA WHERE id_pergunta = ?', tmp.id_pergunta)).n, 0); // saem junto com a pergunta
 
   // Entrevista: uma nota por alternativa (15, 10, 5 ou 0), com pelo menos uma acima de zero
   const NOTAS = 'Na Entrevista, cada alternativa vale 15, 10, 5 ou 0 pontos, com pelo menos uma acima de zero.';
@@ -252,7 +255,7 @@ test('RF05/RF07 + RNF06: sorteio, retomada após recarregar e resposta com troca
   for (const alternativa of [undefined, 'E', 'a', true, ['A']]) {
     falha(await M('POST', `${url}/resposta`, { alternativa }), 400, 'Escolha uma das alternativas: A, B, C ou D.');
   }
-  const certa = letraCerta(perg.id_pergunta);
+  const certa = await letraCerta(perg.id_pergunta);
   const c = ok(await M('POST', `${url}/resposta`, { alternativa: certa }));
   assert.deepEqual([c.etapa, c.jogadores[0].pontuacao, c.jogador_da_vez.id_jogador], ['dado', perg.pontos, beto]);
   assert.deepEqual([c.ultima_jogada.alternativa, c.ultima_jogada.acertou, c.ultima_jogada.pontos, c.ultima_jogada.nome], [certa, true, perg.pontos, 'Ana Souza']);
@@ -261,7 +264,7 @@ test('RF05/RF07 + RNF06: sorteio, retomada após recarregar e resposta com troca
   assert.equal(c.ultima_jogada.pergunta.alternativas.find((a) => a.letra === certa).pontos, perg.pontos);
   // Beto erra: sem pontos, o peão fica na casa e a vez volta para Ana (circular)
   ok(await dado(url, 4));
-  const errada = letraErrada(ok(await M('POST', `${url}/sortear`)).jogada_pendente.pergunta.id_pergunta);
+  const errada = await letraErrada(ok(await M('POST', `${url}/sortear`)).jogada_pendente.pergunta.id_pergunta);
   const i = ok(await M('POST', `${url}/resposta`, { alternativa: errada }));
   assert.deepEqual([i.jogadores[1].casa_atual, i.jogadores[1].pontuacao, i.ultima_jogada.alternativa, i.ultima_jogada.acertou, i.ultima_jogada.pontos], [4, 0, errada, false, 0]);
   assert.deepEqual([i.partida.vez, i.jogador_da_vez.id_jogador], [0, ana]);
@@ -284,7 +287,7 @@ test('Chegou! → premiação; RF08 duplicidade; RF09 baixa e estoque zero; fina
   const url = `/api/partidas/${p1}`;
   falha(await A('PUT', `${url}/jogadores/${ana}/casa`, { casa: 65 }), 400);
   ok(await A('PUT', `${url}/jogadores/${ana}/casa`, { casa: 64 }));
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 180 WHERE id_partida = ? AND id_jogador = ?').run(p1, ana); // cargo mais alto
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 180 WHERE id_partida = ? AND id_jogador = ?', p1, ana); // cargo mais alto
   const fim = ok(await dado(url, 6)); // para no fim da rota
   assert.deepEqual([fim.etapa, fim.partida.status, fim.jogadores[0].casa_atual, fim.ultima_jogada.casa_final, fim.ultima_jogada.casa.acao, fim.ultima_jogada.pergunta],
     ['premiacao', 'Premiação', 65, 65, 'chegada', null]);
@@ -349,7 +352,7 @@ test('RF06: nenhuma pergunta se repete; categoria esgotada → sem_perguntas e "
   for (let i = 0; i < rotinas.length; i++) {
     assert.equal((await vaiPara(3, 1)).categoria.nome, 'Rotinas'); // casa 4 = azul
     sorteadas.push(ok(await M('POST', `${url}/sortear`)).jogada_pendente.pergunta.id_pergunta);
-    ok(await M('POST', `${url}/resposta`, { alternativa: i % 2 === 0 ? letraCerta(sorteadas.at(-1)) : letraErrada(sorteadas.at(-1)) }));
+    ok(await M('POST', `${url}/resposta`, { alternativa: i % 2 === 0 ? await letraCerta(sorteadas.at(-1)) : await letraErrada(sorteadas.at(-1)) }));
   }
   const ordenar = (ids) => ids.toSorted((a, b) => a - b);
   assert.deepEqual(ordenar(sorteadas), ordenar(rotinas)); // todas as de Rotinas, nenhuma repetida
@@ -369,7 +372,7 @@ test('RF06: nenhuma pergunta se repete; categoria esgotada → sem_perguntas e "
     const s = ok(await M('POST', `${url}/sortear`)).jogada_pendente;
     assert.ok(![3, 5].includes(s.categoria.id_categoria));
     sorteadas.push(s.pergunta.id_pergunta);
-    ok(await M('POST', `${url}/resposta`, { alternativa: letraCerta(s.pergunta.id_pergunta) }));
+    ok(await M('POST', `${url}/resposta`, { alternativa: await letraCerta(s.pergunta.id_pergunta) }));
   }
   assert.equal(new Set(sorteadas).size, sorteadas.length);
 
@@ -379,9 +382,10 @@ test('RF06: nenhuma pergunta se repete; categoria esgotada → sem_perguntas e "
 
   // A16: restrições do modelo lógico no schema — CARTA_PARTIDA (partida, pergunta) única e casa → TB_CASA
   const idPartida = Number(url.split('/').at(-1));
-  assert.throws(() => db.prepare(`INSERT INTO TB_JOGADA (id_partida, id_jogador, valor_dado, casa_inicial, casa_final, id_pergunta, concluida)
-    VALUES (?, ?, 1, 3, 4, ?, 1)`).run(idPartida, caio, sorteadas[0]), /UNIQUE/);
-  assert.throws(() => db.prepare('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 999 WHERE id_partida = ?').run(idPartida), /FOREIGN KEY/);
+  // (a chave estrangeira é conferida no libSQL local; o Turso não a confere — db.js)
+  await assert.rejects(db.run(`INSERT INTO TB_JOGADA (id_partida, id_jogador, valor_dado, casa_inicial, casa_final, id_pergunta, concluida)
+    VALUES (?, ?, 1, 3, 4, ?, 1)`, idPartida, caio, sorteadas[0]), /UNIQUE/);
+  await assert.rejects(db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 999 WHERE id_partida = ?', idPartida), /FOREIGN KEY/);
 });
 
 test('admin remove jogador; encerrar pausada com jogada pendente vai para a premiação', async () => {
@@ -460,10 +464,10 @@ test('listagem de partidas e relatórios (admin)', async () => {
   assert.ok(rel.ranking.every((j, i) => i === 0 || rel.ranking[i - 1].pontos >= j.pontos));
   assert.equal(rel.ranking.find((j) => j.id_jogador === ana).melhor_cargo, 'CEO'); // os 180 pontos da partida de Ana
   // Cargo só de partida em que o jogador não foi removido: o Fábio foi removido na única em que entrou com pontos 0
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 500 WHERE id_jogador = ? AND ativo = 0').run(fabio);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 500 WHERE id_jogador = ? AND ativo = 0', fabio);
   const semCargo = ok(await A('GET', '/api/relatorios')).ranking.find((j) => j.id_jogador === fabio);
   assert.notEqual(semCargo?.melhor_cargo, 'CEO');
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 0 WHERE id_jogador = ? AND ativo = 0').run(fabio);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 0 WHERE id_jogador = ? AND ativo = 0', fabio);
   assert.deepEqual(rel.por_escola.find((x) => x.id_escola === escola).jogadores, 6);
   const r1 = rel.partidas.find((p) => p.id_partida === p1);
   assert.deepEqual([r1.jogadores, r1.vencedor], ['Ana Souza, Beto Lima', 'Ana Souza']);
@@ -503,10 +507,10 @@ test('A45: ação na API vinda de outra origem → 403 (CSRF); a própria tela p
 
 test('A26: sessão vencida (7 dias) → 401; o login apaga as vencidas sem derrubar as outras', async () => {
   const velha = await entrar('mediador@senai.com.br', 'mediador123');
-  db.prepare('UPDATE TB_SESSAO SET criado_em = unixepoch() - 7 * 86400 WHERE token = ?').run(velha);
+  await db.run('UPDATE TB_SESSAO SET criado_em = unixepoch() - 7 * 86400 WHERE token = ?', velha);
   falha(await chamar(velha, 'GET', '/api/me'), 401);
   await entrar('mediador@senai.com.br', 'mediador123');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM TB_SESSAO WHERE token = ?').get(velha).n, 0);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM TB_SESSAO WHERE token = ?', velha)).n, 0);
   ok(await M('GET', '/api/me')); // vários tablets na mesma conta: as sessões válidas continuam
 });
 
@@ -551,21 +555,23 @@ test('A6: os exemplos só são semeados na criação do banco (PRAGMA user_versi
       process.env.DB_PATH = ':memory:';
     }
   };
-  const contar = (d) => ({ ...d.prepare(`SELECT (SELECT COUNT(*) FROM TB_USUARIO) AS usuarios, (SELECT COUNT(*) FROM TB_ESCOLA) AS escolas,
-    (SELECT COUNT(*) FROM TB_PERGUNTA) AS perguntas, (SELECT user_version FROM pragma_user_version) AS versao`).get() });
+  const contar = async (d) => ({ ...(await d.get(`SELECT (SELECT COUNT(*) FROM TB_USUARIO) AS usuarios, (SELECT COUNT(*) FROM TB_ESCOLA) AS escolas,
+    (SELECT COUNT(*) FROM TB_PERGUNTA) AS perguntas, (SELECT user_version FROM pragma_user_version) AS versao`)) });
   try {
     let d = await abrir(1);
-    assert.deepEqual([contar(d).versao, contar(d).escolas], [1, 1]);
-    assert.deepEqual(d.prepare('SELECT quantidade_estoque AS n FROM TB_BRINDE ORDER BY pontos_minimos').all().map((b) => b.n), [42, 32, 59, 72, 41, 27, 15, 12]); // 300 chaveiros
-    d.exec('DELETE FROM TB_ESCOLA; DELETE FROM TB_PERGUNTA;'); // o admin apagou tudo
+    const novo = await contar(d);
+    assert.deepEqual([novo.versao, novo.escolas], [1, 1]);
+    assert.deepEqual((await d.all('SELECT quantidade_estoque AS n FROM TB_BRINDE ORDER BY pontos_minimos')).map((b) => b.n), [42, 32, 59, 72, 41, 27, 15, 12]); // 300 chaveiros
+    await d.exec('DELETE FROM TB_ESCOLA; DELETE FROM TB_PERGUNTA;'); // o admin apagou tudo
     d.close();
     d = await abrir(2);
-    assert.deepEqual(contar(d), { usuarios: 2, escolas: 0, perguntas: 0, versao: 1 }); // e continua apagado
+    assert.deepEqual(await contar(d), { usuarios: 2, escolas: 0, perguntas: 0, versao: 1 }); // e continua apagado
     // banco de antes da versão (user_version 0) já populado: não duplica nada e passa para a versão 1
-    d.exec('PRAGMA user_version = 0');
+    await d.exec('PRAGMA user_version = 0');
     d.close();
     d = await abrir(3);
-    assert.deepEqual([contar(d).usuarios, contar(d).versao], [2, 1]);
+    const antigo = await contar(d);
+    assert.deepEqual([antigo.usuarios, antigo.versao], [2, 1]);
     d.close();
     // Banco da fase 1 (coluna casa_minima): recusado com mensagem clara, sem criar nem alterar nada nele
     const fase1 = new DatabaseSync(join(pasta, 'fase1.db'));
@@ -621,7 +627,7 @@ test('Entrevista: casa com maleta, nota por alternativa e fora das casas-surpres
     assert.deepEqual([e.jogada_pendente.casa.icone, e.jogada_pendente.casa.sorteada, e.jogada_pendente.categoria.nome], ['maleta', false, 'Entrevista']);
     const p = ok(await M('POST', `${url}/sortear`)).jogada_pendente.pergunta;
     assert.deepEqual([p.entrevista, p.pontos], [true, 15]);
-    const { letra } = db.prepare('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? AND pontos = ?').get(p.id_pergunta, nota);
+    const { letra } = (await db.get('SELECT letra FROM TB_ALTERNATIVA WHERE id_pergunta = ? AND pontos = ?', p.id_pergunta, nota));
     const antes = ok(await M('GET', url)).jogadores[0].pontuacao;
     const r = ok(await M('POST', `${url}/resposta`, { alternativa: letra }));
     assert.deepEqual([r.jogadores[0].pontuacao, r.ultima_jogada.pontos, r.ultima_jogada.acertou], [antes + nota, nota, nota > 0]);
@@ -632,7 +638,7 @@ test('Casa da Morte: elimina sem pergunta, a vez pula o eliminado e ele recebe o
   for (const b of ok(await M('GET', '/api/brindes'))) ok(await A('PUT', `/api/brindes/${b.id_brinde}`, { quantidade_estoque: 50 })); // os testes anteriores gastaram
   const { url, e, vaiPara } = await partida([{ id_jogador: duda }, { id_jogador: eva }, { id_jogador: fabio }]);
   assert.equal(e.jogador_da_vez.id_jogador, duda);
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 50 WHERE id_partida = ? AND id_jogador = ?').run(e.partida.id_partida, duda);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 50 WHERE id_partida = ? AND id_jogador = ?', e.partida.id_partida, duda);
   const m = await vaiPara(duda, 16, 1); // casa 17 = caveira
   const d = m.jogadores[0];
   assert.deepEqual([m.etapa, m.jogada_pendente, d.eliminado, d.ativo, d.da_vez, d.pontuacao, d.brinde.cargo], ['dado', null, true, true, false, 50, 'Gerente Geral']);
@@ -711,8 +717,8 @@ test('Rotas: cada jogador segue a sua, com caminhos que se juntam até o Chegou!
   assert.deepEqual([fim.etapa, fim.jogadores[0].casa_atual, fim.jogadores[0].faltam], ['premiacao', 65, 0]);
   // Desempate pelo que falta até o Chegou!, e não pelo número da casa: quem está na 64 vence quem está na 201
   const emp = await partida([{ id_jogador: duda, rota: 'direita' }, { id_jogador: eva }]);
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 201 WHERE id_partida = ? AND id_jogador = ?').run(emp.e.partida.id_partida, duda);
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 64 WHERE id_partida = ? AND id_jogador = ?').run(emp.e.partida.id_partida, eva);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 201 WHERE id_partida = ? AND id_jogador = ?', emp.e.partida.id_partida, duda);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = 64 WHERE id_partida = ? AND id_jogador = ?', emp.e.partida.id_partida, eva);
   const rel = ok(await A('GET', '/api/relatorios')).partidas.find((p) => p.id_partida === emp.e.partida.id_partida);
   assert.equal(rel.vencedor, 'Eva Martins');
 });
@@ -726,7 +732,7 @@ test('Cargos: oito faixas de pontos, do Jovem Aprendiz ao CEO', async () => {
     [49, 'Gerente'], [50, 'Gerente Geral'], [59, 'Gerente Geral'], [60, 'Diretor de Área'], [69, 'Diretor de Área'], [70, 'Vice-Presidente'],
     [79, 'Vice-Presidente'], [80, 'CEO'], [500, 'CEO']];
   for (const [pontos, cargo] of casos) {
-    db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = ? WHERE id_partida = ?').run(pontos, e.partida.id_partida);
+    await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = ? WHERE id_partida = ?', pontos, e.partida.id_partida);
     assert.equal(ok(await M('GET', url)).jogadores[0].brinde.cargo, cargo, `${pontos} pontos`);
   }
 });
@@ -744,7 +750,7 @@ test('Sigilo: a pergunta encerrada sem resposta não revela a correção; a resp
   const d = await partida([{ id_jogador: caio }]);
   await d.vaiPara(caio, 3, 1);
   const p = ok(await M('POST', `${d.url}/sortear`)).jogada_pendente.pergunta;
-  ok(await M('POST', `${d.url}/resposta`, { alternativa: letraCerta(p.id_pergunta) }));
+  ok(await M('POST', `${d.url}/resposta`, { alternativa: await letraCerta(p.id_pergunta) }));
   const pub = ok(await anonimo('GET', `/api/publico/partidas/${d.e.partida.codigo_online}`));
   assert.ok(pub.ultima_jogada.pergunta.resposta);
   assert.ok(pub.ultima_jogada.pergunta.alternativas.some((a) => a.pontos > 0));
@@ -756,7 +762,7 @@ test('Certificado: só depois do fim, com cargo, e e-mail apenas para o administ
   const cert = `${url}/certificados/${ana}`;
   falha(await M('GET', cert), 409, 'O certificado só é emitido depois do fim da partida.');
   falha(await anonimo('GET', cert), 401);
-  db.prepare('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 75 WHERE id_partida = ? AND id_jogador = ?').run(e.partida.id_partida, ana);
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET pontuacao = 75 WHERE id_partida = ? AND id_jogador = ?', e.partida.id_partida, ana);
   ok(await M('POST', `${url}/encerrar`));
   const c = ok(await M('GET', cert));
   assert.deepEqual([c.nome, c.escola, c.cargo, c.pontuacao, c.unidade, 'email' in c], ['Ana Souza', 'Escola Básica São João', 'Vice-Presidente', 75, 'SENAI Videira', false]);
@@ -790,7 +796,7 @@ test('Certificado: só depois do fim, com cargo, e e-mail apenas para o administ
   assert.equal((await anonimo('GET', pagina)).status, 302);
 });
 
-test('Banco inicial: alternativas completas, pontos pela dificuldade e letras equilibradas', () => {
+test('Banco inicial: alternativas completas, pontos pela dificuldade e letras equilibradas', async () => {
   const perguntas = JSON.parse(readFileSync(new URL('../data/perguntas.json', import.meta.url), 'utf8'));
   const porCategoria = Map.groupBy(perguntas, (p) => p.id_categoria);
   assert.deepEqual([1, 2, 3, 4, 5].map((c) => porCategoria.get(c)?.length), [25, 25, 25, 25, 12]);
@@ -811,16 +817,16 @@ test('Banco inicial: alternativas completas, pontos pela dificuldade e letras eq
     for (const l of 'ABCD') assert.ok(letras.filter((x) => x === l).length / lista.length <= 0.35, `categoria ${categoria}, letra ${l}`);
   }
   // Toda pergunta semeada no banco tem 4 alternativas
-  const semQuatro = db.prepare(`SELECT p.id_pergunta FROM TB_PERGUNTA p LEFT JOIN TB_ALTERNATIVA a USING (id_pergunta)
-    GROUP BY p.id_pergunta HAVING COUNT(a.letra) <> 4`).all();
+  const semQuatro = (await db.all(`SELECT p.id_pergunta FROM TB_PERGUNTA p LEFT JOIN TB_ALTERNATIVA a USING (id_pergunta)
+    GROUP BY p.id_pergunta HAVING COUNT(a.letra) <> 4`));
   assert.deepEqual(semQuatro, []);
   // Pergunta comum: só a correta pontua, pela dificuldade. Entrevista: as notas 15, 10, 5 e 0
-  const pontosErrados = db.prepare(`SELECT p.id_pergunta FROM TB_PERGUNTA p WHERE p.id_categoria <> 5 AND (
+  const pontosErrados = (await db.all(`SELECT p.id_pergunta FROM TB_PERGUNTA p WHERE p.id_categoria <> 5 AND (
     (SELECT COUNT(*) FROM TB_ALTERNATIVA a WHERE a.id_pergunta = p.id_pergunta AND a.pontos > 0) <> 1
     OR (SELECT MAX(a.pontos) FROM TB_ALTERNATIVA a WHERE a.id_pergunta = p.id_pergunta)
-       <> CASE p.dificuldade WHEN 'Fácil' THEN 5 WHEN 'Médio' THEN 10 ELSE 15 END)`).all();
+       <> CASE p.dificuldade WHEN 'Fácil' THEN 5 WHEN 'Médio' THEN 10 ELSE 15 END)`));
   assert.deepEqual(pontosErrados, []);
-  const notasErradas = db.prepare(`SELECT p.id_pergunta FROM TB_PERGUNTA p WHERE p.id_categoria = 5 AND
-    (SELECT GROUP_CONCAT(pontos) FROM (SELECT a.pontos FROM TB_ALTERNATIVA a WHERE a.id_pergunta = p.id_pergunta ORDER BY a.pontos)) <> '0,5,10,15'`).all();
+  const notasErradas = (await db.all(`SELECT p.id_pergunta FROM TB_PERGUNTA p WHERE p.id_categoria = 5 AND
+    (SELECT GROUP_CONCAT(pontos) FROM (SELECT a.pontos FROM TB_ALTERNATIVA a WHERE a.id_pergunta = p.id_pergunta ORDER BY a.pontos)) <> '0,5,10,15'`));
   assert.deepEqual(notasErradas, []);
 });

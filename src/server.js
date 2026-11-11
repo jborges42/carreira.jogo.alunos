@@ -62,8 +62,8 @@ app.get('/admin/relatorios', pagina('admin-relatorios.html', 'admin'));
 
 // A42 (RNF03): arquivos estáticos só depois da API e das páginas. O express.static faz fs.stat no threadpool do
 // libuv, que o scrypt dos logins pode ocupar; assim as rotas /api (ações do mediador, telão) não esperam por ele.
+// Na Vercel o express.static é ignorado: a CDN serve a pasta public/ (por isso as fontes ficam em public/vendor).
 app.use(express.static(join(RAIZ, 'public'), { index: false }));
-app.use('/vendor/fredoka', express.static(join(RAIZ, 'node_modules/@fontsource/fredoka')));
 
 app.use((req, res) => res.status(404).sendFile(join(VIEWS, '404.html')));
 
@@ -86,6 +86,8 @@ app.use((err, req, res, next) => {
     : ERRO_DO_CORPO[status] ?? 'Requisição inválida.'; // ex.: 412/416 de cabeçalhos If-Match/Range nas páginas
   res.status(status).type('json').json({ erro }); // type: o envio de arquivo pode já ter posto text/html
 });
+
+export default app; // Vercel: o app inteiro vira uma função (docs "Express on Vercel")
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const PORTA = Number(process.env.PORT) || 3000;

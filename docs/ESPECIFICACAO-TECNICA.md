@@ -22,16 +22,16 @@ Os riscos medidos e o que fica fora do sistema estão no §8.
 
 ## 1. Stack e estrutura
 
-- **Node.js ≥ 22.13** (usa `node:sqlite`, embutido), **Express 5**, HTML5 + CSS3 + JavaScript puro (ES modules, sem build) — RNF05.
+- **Node.js ≥ 22.13**, **Express 5**, SQLite pelo **libSQL** (`@libsql/client`: arquivo local ou, na Vercel, Turso), HTML5 + CSS3 + JavaScript puro (ES modules, sem build) — RNF05.
 - **SQLite** local em `data/carreira.db`, criado e populado automaticamente na 1ª execução: os seeds só rodam com `PRAGMA user_version = 0` e gravam `PRAGMA user_version = 1` na mesma transação, então o que o administrador excluir (escola, perguntas) não volta ao reiniciar. Num banco já no schema atual, mas com `user_version = 0`, cada seed só preenche tabela vazia. `DB_PATH=:memory:` nos testes.
 - **Banco da fase 1 é recusado, sem migração [FASE 2]** — a coluna `casa_minima` em `TB_BRINDE` o identifica, e a subida para antes de qualquer `CREATE` com o erro `<caminho> é da fase 1 e não é migrado. Pare o servidor, guarde esse arquivo em outra pasta (com -wal e -shm, se existirem) e inicie de novo.` Os três arquivos saem juntos: os dados mais recentes podem estar no `-wal`, e o SQLite descarta um `-wal` deixado para trás ao criar o banco novo. Ao fechar a conexão recusada, o SQLite pode consolidar o `-wal` no `.db`; nesse caso sobra um arquivo só. O banco de teste da fase 1 fica guardado em `data/backup-fase1/`.
-- Fonte Fredoka (OFL) servida localmente em `/vendor/fredoka/...` — nada depende de internet no dia do evento.
+- Fonte Fredoka (OFL) servida localmente em `/vendor/fredoka/...` (arquivos em `public/vendor/fredoka`) — nada depende de internet no dia do evento.
 
 ```
 src/server.js      rotas de página + guarda de acesso (RNF04) + bloqueio de origem cruzada + monta /api + erros em JSON
 src/auth.js        sessão por cookie (7 dias), login/logout/me, exigeLogin/exigeAdmin
 src/senha.js       hash scrypt (conferência assíncrona no login)
-src/db.js          recusa do banco da fase 1 + schema + seeds só em banco novo (usuários, escola, categorias, casas, brindes, perguntas e alternativas) + função sem_acento() das buscas + ROTAS e gravarAlternativas()
+src/db.js          recusa do banco da fase 1 + schema + seeds só em banco novo (usuários, escola, categorias, casas, brindes, perguntas e alternativas) + ROTAS e gravarAlternativas(); conexão com o arquivo local ou o Turso
 src/api.js         TODAS as rotas /api (exceto login/logout/me)
 src/jogo.js        motor da partida (regras RF03–RF09, RNF06) + dados do certificado
 data/tabuleiro.json  121 casas (0 = INÍCIO, 1–64, 65 = Chegou!, 101–119 só na rota Centro, 201–236 só na rota Direita) com coordenadas em % da imagem + "rotas" (a sequência de casas de cada rota)
@@ -105,7 +105,7 @@ O schema completo está em `src/db.js` (fonte da verdade). Resumo:
 
 **Mudanças da fase 2, sem migração** (§1): tabela nova TB_ALTERNATIVA; colunas novas `TB_BRINDE.cargo` e `pontos_minimos`, `TB_JOGADOR_PARTIDA.rota` e `eliminado`, `TB_JOGADA.alternativa`; colunas removidas `TB_PERGUNTA.pontos` (agora vem das alternativas), `TB_BRINDE.nivel` e `casa_minima`. Como o banco da fase 1 é recusado, todo banco em uso já tem este schema, com as referências a `TB_CASA(numero)` e o índice `ux_jogada_pergunta`.
 
-`src/db.js` exporta `db` (DatabaseSync) e `transacao(fn)` (BEGIN IMMEDIATE/COMMIT/ROLLBACK). Toda ação que grava mais de uma linha usa `transacao` (RNF06).
+`src/db.js` exporta `db` (`get`, `all`, `run` e `lote`, assíncronos, sobre o `@libsql/client`) e `transacao(fn)` (transação de escrita: as consultas da requisição feitas dentro de `fn` vão para ela; sem o commit, desfaz). Toda ação que grava mais de uma linha usa `transacao` (RNF06). A busca sem acento (A27) é feita em JavaScript, porque o Turso não aceita função própria no SQL. O Turso também não confere chave estrangeira, então a exclusão de pergunta anula o histórico e apaga as alternativas no próprio código.
 
 ## 4. Regras do motor (`src/jogo.js`)
 

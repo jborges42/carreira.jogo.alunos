@@ -689,7 +689,7 @@ A coluna "Origem" separa o que veio do usuário (relatório, respostas e mensage
 
 ### 12.1 Tecnologias
 
-- **Node.js 22.13+** com **SQLite embutido** (`node:sqlite`) — banco local em `data/carreira.db`, criado e populado automaticamente.
+- **Node.js 22.13+** com **SQLite** pelo libSQL (`@libsql/client`) — banco local em `data/carreira.db`, criado e populado automaticamente; na Vercel, um banco Turso (README).
 - **Express 5** (servidor web e API REST).
 - **HTML5 + CSS3 + JavaScript** puros no navegador (RNF05), fonte **Fredoka** (licença OFL) servida localmente — funciona sem internet no evento.
 
