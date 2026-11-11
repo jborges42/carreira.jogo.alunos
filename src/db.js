@@ -174,7 +174,6 @@ CREATE TABLE IF NOT EXISTS TB_ENTREGA_BRINDE (        -- RF08 (+ id_partida p/ "
 );
 `);
 
-const vazio = async (t) => (await db.get(`SELECT COUNT(*) n FROM ${t}`)).n === 0;
 const json = (arq) => JSON.parse(readFileSync(join(RAIZ, 'data', arq), 'utf8'));
 
 export const ROTAS = json('tabuleiro.json').rotas; // sequência de casas de cada rota, do INÍCIO ao Chegou!
@@ -224,33 +223,28 @@ export async function transacao(fn) {
 }
 
 // A6: seeds só na criação do banco ("populado na 1ª execução"): excluir todas as perguntas ou escolas
-// não as traz de volta no próximo início. Os testes vazio() ficam para os bancos antigos (user_version 0 já populados).
-// Numa transação de escrita e numa ida só ao banco: duas instâncias da Vercel subindo juntas não semeiam duas vezes.
+// não as traz de volta no próximo início. Banco novo = sem usuários, que o app nunca exclui (a marca era o
+// PRAGMA user_version, mas o Turso não deixa gravá-lo). Numa transação de escrita e numa ida só ao banco: duas
+// instâncias da Vercel subindo juntas não semeiam duas vezes, e um erro no meio desfaz tudo.
 await transacao(async () => {
-  if ((await db.get('PRAGMA user_version')).user_version !== 0) return;
+  if (await db.get('SELECT 1 FROM TB_USUARIO')) return;
+  // Na Vercel o site é público e o README (também público) mostra as senhas padrão: lá elas são obrigatórias.
+  if (remoto && !(process.env.SENHA_ADMIN && process.env.SENHA_MEDIADOR)) {
+    throw new Error('Defina SENHA_ADMIN e SENHA_MEDIADOR nas variáveis de ambiente antes do primeiro acesso: as senhas padrão estão no README público.');
+  }
   const lote = [];
   const inserir = (sql, ...linhas) => linhas.forEach((args) => lote.push({ sql, args }));
-  if (await vazio('TB_USUARIO')) {
-    // Na Vercel o site é público e o README (também público) mostra as senhas padrão: lá elas são obrigatórias.
-    if (remoto && !(process.env.SENHA_ADMIN && process.env.SENHA_MEDIADOR)) {
-      throw new Error('Defina SENHA_ADMIN e SENHA_MEDIADOR nas variáveis de ambiente antes do primeiro acesso: as senhas padrão estão no README público.');
-    }
-    inserir('INSERT INTO TB_USUARIO (nome, email, senha, perfil) VALUES (?, ?, ?, ?)',
-      ['Prof. Carlos Alexandre dos Santos', 'professor@senai.com.br', hashSenha(process.env.SENHA_ADMIN || 'admin123'), 'Administrador'],
-      ['Aprendiz Mediador', 'mediador@senai.com.br', hashSenha(process.env.SENHA_MEDIADOR || 'mediador123'), 'Mediador']);
-  }
-  if (await vazio('TB_ESCOLA')) inserir('INSERT INTO TB_ESCOLA (nome, cidade) VALUES (?, ?)', ['SENAI Videira', 'Videira']);
-  if (await vazio('TB_CATEGORIA')) inserir('INSERT INTO TB_CATEGORIA (id_categoria, nome, cor, cor_hex, mecanica) VALUES (?, ?, ?, ?, ?)', ...CATEGORIAS);
-  if (await vazio('TB_CASA')) {
-    inserir('INSERT INTO TB_CASA (numero, tipo, cor, icone, id_categoria, x, y) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ...json('tabuleiro.json').casas.map((c) => [c.numero, c.tipo, c.cor, c.icone, CATEGORIA_DA_COR[c.cor] ?? null, c.x, c.y]));
-  }
-  if (await vazio('TB_BRINDE')) {
-    inserir('INSERT INTO TB_BRINDE (nome, cargo, pontos_minimos, quantidade_estoque) VALUES (?, ?, ?, ?)',
-      ...CARGOS.map(([cargo, pontos, estoque]) => [`Chaveiro ${cargo}`, cargo, pontos, estoque]));
-  }
-  if (await vazio('TB_PERGUNTA') && existsSync(join(RAIZ, 'data', 'perguntas.json'))) {
-    // Tabela vazia: os ids 1, 2, 3... estão livres e ligam cada pergunta às suas alternativas dentro do mesmo lote
+  inserir('INSERT INTO TB_USUARIO (nome, email, senha, perfil) VALUES (?, ?, ?, ?)',
+    ['Prof. Carlos Alexandre dos Santos', 'professor@senai.com.br', hashSenha(process.env.SENHA_ADMIN || 'admin123'), 'Administrador'],
+    ['Aprendiz Mediador', 'mediador@senai.com.br', hashSenha(process.env.SENHA_MEDIADOR || 'mediador123'), 'Mediador']);
+  inserir('INSERT INTO TB_ESCOLA (nome, cidade) VALUES (?, ?)', ['SENAI Videira', 'Videira']);
+  inserir('INSERT INTO TB_CATEGORIA (id_categoria, nome, cor, cor_hex, mecanica) VALUES (?, ?, ?, ?, ?)', ...CATEGORIAS);
+  inserir('INSERT INTO TB_CASA (numero, tipo, cor, icone, id_categoria, x, y) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ...json('tabuleiro.json').casas.map((c) => [c.numero, c.tipo, c.cor, c.icone, CATEGORIA_DA_COR[c.cor] ?? null, c.x, c.y]));
+  inserir('INSERT INTO TB_BRINDE (nome, cargo, pontos_minimos, quantidade_estoque) VALUES (?, ?, ?, ?)',
+    ...CARGOS.map(([cargo, pontos, estoque]) => [`Chaveiro ${cargo}`, cargo, pontos, estoque]));
+  if (existsSync(join(RAIZ, 'data', 'perguntas.json'))) {
+    // Banco novo: os ids 1, 2, 3... estão livres e ligam cada pergunta às suas alternativas dentro do mesmo lote
     json('perguntas.json').forEach((p, i) => {
       const dificuldade = p.dificuldade || 'Médio';
       inserir('INSERT INTO TB_PERGUNTA (id_pergunta, enunciado, resposta, id_categoria, dificuldade) VALUES (?, ?, ?, ?, ?)',
@@ -258,6 +252,5 @@ await transacao(async () => {
       lote.push(...sqlAlternativas(i + 1, { ...p, dificuldade }));
     });
   }
-  lote.push({ sql: 'PRAGMA user_version = 1' }); // na mesma transação: um erro no seed desfaz também a versão
   await db.lote(lote);
 });

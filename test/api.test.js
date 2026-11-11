@@ -544,7 +544,7 @@ test('A42: as rotas /api não passam pelo express.static (o fs.stat dele espera 
   }
 });
 
-test('A6: os exemplos só são semeados na criação do banco (PRAGMA user_version)', async () => {
+test('A6: os exemplos só são semeados na criação do banco (banco sem usuários)', async () => {
   const pasta = mkdtempSync(join(tmpdir(), 'carreira-'));
   // nova instância do módulo sobre o mesmo arquivo = novo início do servidor
   const abrir = async (n) => {
@@ -556,22 +556,16 @@ test('A6: os exemplos só são semeados na criação do banco (PRAGMA user_versi
     }
   };
   const contar = async (d) => ({ ...(await d.get(`SELECT (SELECT COUNT(*) FROM TB_USUARIO) AS usuarios, (SELECT COUNT(*) FROM TB_ESCOLA) AS escolas,
-    (SELECT COUNT(*) FROM TB_PERGUNTA) AS perguntas, (SELECT user_version FROM pragma_user_version) AS versao`)) });
+    (SELECT COUNT(*) FROM TB_PERGUNTA) AS perguntas`)) });
   try {
     let d = await abrir(1);
     const novo = await contar(d);
-    assert.deepEqual([novo.versao, novo.escolas], [1, 1]);
+    assert.deepEqual([novo.usuarios, novo.escolas], [2, 1]);
     assert.deepEqual((await d.all('SELECT quantidade_estoque AS n FROM TB_BRINDE ORDER BY pontos_minimos')).map((b) => b.n), [42, 32, 59, 72, 41, 27, 15, 12]); // 300 chaveiros
     await d.exec('DELETE FROM TB_ESCOLA; DELETE FROM TB_PERGUNTA;'); // o admin apagou tudo
     d.close();
     d = await abrir(2);
-    assert.deepEqual(await contar(d), { usuarios: 2, escolas: 0, perguntas: 0, versao: 1 }); // e continua apagado
-    // banco de antes da versão (user_version 0) já populado: não duplica nada e passa para a versão 1
-    await d.exec('PRAGMA user_version = 0');
-    d.close();
-    d = await abrir(3);
-    const antigo = await contar(d);
-    assert.deepEqual([antigo.usuarios, antigo.versao], [2, 1]);
+    assert.deepEqual(await contar(d), { usuarios: 2, escolas: 0, perguntas: 0 }); // continua apagado e não duplica os usuários
     d.close();
     // Banco da fase 1 (coluna casa_minima): recusado com mensagem clara, sem criar nem alterar nada nele
     const fase1 = new DatabaseSync(join(pasta, 'fase1.db'));
