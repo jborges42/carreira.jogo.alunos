@@ -25,6 +25,14 @@ Na Vercel o disco da função é só leitura e não guarda nada entre execuçõe
 
 A função roda em `iad1` (`vercel.json`), ao lado do banco: cada tela faz várias consultas, e o Turso não tem região na América do Sul. As fontes ficam em `public/`, porque a Vercel serve essa pasta pela CDN e ignora o `express.static`.
 
+## Na feira: partida contínua e telão automático
+
+- **Telão:** no computador do telão, abra `/acompanhar/atual` (por exemplo, https://carreirajogoalunos.vercel.app/acompanhar/atual) e toque em **Tela cheia**. Ele mostra sempre a partida mais recente, sem digitar código.
+- **Começar:** em **Nova Partida**, escolha os primeiros visitantes (1 a 4), marque **Partida contínua (feira)** e toque em **Iniciar**.
+- **Entrar:** na tela da partida, o cartão **Entrar na partida** coloca o próximo visitante (cadastrado na Recepção) numa cor livre. Ele começa no INÍCIO e joga depois de quem já está na fila.
+- **Sair:** quem chega ao **Chegou!** ou cai na **Casa da Morte** sai na hora. O cartão **Terminaram** pede a entrega do chaveiro do cargo alcançado, o certificado já fica disponível e a cor fica livre para o próximo.
+- **Fim do dia:** **Encerrar partida**. Quem ainda está jogando vai para a premiação com a pontuação atual.
+
 ## Ao rodar a fase 2
 
 - **Banco da fase 1 é recusado.** O schema mudou e não há migração: com um banco antigo, o servidor não sobe e o erro diz `é da fase 1 e não é migrado`. Pare o servidor e mova para outra pasta (por exemplo, `data/backup-fase1/`) os três arquivos, `data/carreira.db`, `data/carreira.db-wal` e `data/carreira.db-shm`, ou os que existirem. Não mova só o `.db`: os dados mais recentes podem estar no `-wal`, e o SQLite descarta esse arquivo ao criar o banco novo. Na próxima subida nasce um banco novo, com as senhas iniciais da tabela acima (ou as de `SENHA_ADMIN` e `SENHA_MEDIADOR`).

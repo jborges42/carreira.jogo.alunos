@@ -18,7 +18,10 @@ const FORA_DE_HORA = {
   dado: 'Lance primeiro o dado.',
   sortear: 'Sorteie primeiro a pergunta desta jogada.',
   responder: 'Escolha primeiro uma das alternativas da pergunta.',
+  aguardando: 'Ninguém está jogando agora: coloque o próximo visitante na partida.',
 };
+// Quem está na fila de vez. Na partida contínua, quem chega ao Chegou! ou cai na caveira sai do tabuleiro (terminou_em).
+const JOGANDO = 'ativo = 1 AND eliminado = 0 AND terminou_em IS NULL';
 
 // doApp: só a mensagem destes erros (em português) sai para a tela; a das bibliotecas, não (A28, server.js)
 export const erro = (status, mensagem) => Object.assign(new Error(mensagem), { status, doApp: true });
@@ -63,11 +66,12 @@ const acaoDaCasa = (c) => (c.tipo === 'chegada' ? 'chegada' : c.icone === 'cavei
 export const faltam = (j) => ROTAS[j.rota].length - 1 - ROTAS[j.rota].indexOf(j.casa_atual);
 
 // §4.2: etapa derivada do banco — recarregar a página retoma exatamente do mesmo ponto (RNF06)
-function etapaDe(p, pendente) {
+function etapaDe(p, pendente, alguemJogando) {
   if (p.status === 'Finalizada') return 'finalizada';
   if (p.status === 'Premiação') return 'premiacao';
   if (p.status === 'Pausada') return 'pausada';
   if (pendente) return pendente.id_pergunta == null ? 'sortear' : 'responder';
+  if (!alguemJogando) return 'aguardando'; // só na partida contínua: espera o próximo visitante
   return 'dado';
 }
 
@@ -75,7 +79,8 @@ async function carregar(id) {
   const p = await db.get('SELECT * FROM TB_PARTIDA WHERE id_partida = ?', id);
   if (!p) throw erro(404, 'Partida não encontrada.');
   const pendente = await db.get('SELECT * FROM TB_JOGADA WHERE id_partida = ? AND concluida = 0', p.id_partida);
-  return { p, pendente, etapa: etapaDe(p, pendente) };
+  const alguemJogando = !p.continua || Boolean(await db.get(`SELECT 1 FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ${JOGANDO}`, p.id_partida));
+  return { p, pendente, etapa: etapaDe(p, pendente, alguemJogando) };
 }
 
 const exigirEtapa = (etapa, esperada) => {
@@ -108,11 +113,12 @@ async function irParaPremiacao(idPartida) {
                 WHERE id_partida = ?`, t, t, idPartida);
 }
 
-// §4.7: vez = próximo jogador que ainda joga depois do atual (circular). Sem ninguém em jogo, a partida termina.
+// §4.7: vez = próximo jogador que ainda joga depois do atual (circular). Sem ninguém em jogo, a partida termina
+// (a contínua, não: fica aguardando o próximo visitante).
 async function passarVez(p) {
-  const ordens = (await db.all('SELECT ordem FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ativo = 1 AND eliminado = 0 ORDER BY ordem',
+  const ordens = (await db.all(`SELECT ordem FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ${JOGANDO} ORDER BY ordem`,
     p.id_partida)).map((r) => r.ordem);
-  if (!ordens.length) return irParaPremiacao(p.id_partida);
+  if (!ordens.length) return p.continua ? undefined : irParaPremiacao(p.id_partida);
   await db.run('UPDATE TB_PARTIDA SET vez = ? WHERE id_partida = ?', ordens.find((o) => o > p.vez) ?? ordens[0], p.id_partida);
 }
 
@@ -154,17 +160,24 @@ export async function estado(id) {
   const { p, pendente, etapa } = await carregar(id);
   const t = agora();
   const comVez = ['dado', 'sortear', 'responder', 'pausada'].includes(etapa);
+  // Partida contínua: o dia inteiro cabe nela, então só vem quem está na mesa — jogando, esperando o chaveiro ou entre
+  // os 6 últimos a terminar (o telão mostra esses). Os demais estão nos certificados e relatórios.
   const linhas = await db.all(`
     SELECT jp.id_jogador, j.nome, j.apelido, e.nome AS escola, jp.ordem, jp.peao, jp.rota, jp.casa_atual, jp.pontuacao, jp.ativo, jp.eliminado,
+           jp.terminou_em,
            (SELECT id_brinde FROM TB_ENTREGA_BRINDE eb WHERE eb.id_partida = jp.id_partida AND eb.id_jogador = jp.id_jogador) AS id_entregue
     FROM TB_JOGADOR_PARTIDA jp JOIN TB_JOGADOR j ON j.id_jogador = jp.id_jogador JOIN TB_ESCOLA e ON e.id_escola = j.id_escola
-    WHERE jp.id_partida = ? ORDER BY jp.ordem`, p.id_partida);
+    WHERE jp.id_partida = ? AND (? = 0 OR jp.ativo = 1 AND (jp.terminou_em IS NULL
+      OR NOT EXISTS (SELECT 1 FROM TB_ENTREGA_BRINDE eb WHERE eb.id_partida = jp.id_partida AND eb.id_jogador = jp.id_jogador)
+      OR jp.id_jogador IN (SELECT id_jogador FROM TB_JOGADOR_PARTIDA WHERE id_partida = jp.id_partida AND terminou_em IS NOT NULL
+                           ORDER BY terminou_em DESC, ordem DESC LIMIT 6)))
+    ORDER BY jp.ordem`, p.id_partida, p.continua);
   const jogadores = await Promise.all(linhas.map(async ({ id_entregue, ...j }) => ({
     ...j,
     ativo: Boolean(j.ativo),
     eliminado: Boolean(j.eliminado),
     faltam: faltam(j),
-    da_vez: comVez && Boolean(j.ativo) && !j.eliminado && j.ordem === p.vez,
+    da_vez: comVez && Boolean(j.ativo) && !j.eliminado && j.terminou_em == null && j.ordem === p.vez,
     // depois da entrega vale o brinde entregue; antes, o da pontuação atual
     brinde: id_entregue ? await db.get(`${BRINDE} WHERE id_brinde = ?`, id_entregue) : await brindeDaPontuacao(j.pontuacao),
     entregue: id_entregue != null,
@@ -179,6 +192,7 @@ export async function estado(id) {
       // §4.10
       tempo_decorrido_s: (p.encerrada_em ?? t) - p.iniciada_em - p.segundos_pausados - (p.pausada_em ? t - p.pausada_em : 0),
       vez: p.vez,
+      continua: Boolean(p.continua),
     },
     etapa,
     casa_chegada: CASA_CHEGADA,
@@ -190,7 +204,7 @@ export async function estado(id) {
       alternativa: ultima.alternativa,
       acertou: ultima.acertou == null ? null : Boolean(ultima.acertou),
       pontos: ultima.pontos,
-      nome: jogadores.find((j) => j.id_jogador === ultima.id_jogador).nome,
+      nome: jogadores.find((j) => j.id_jogador === ultima.id_jogador)?.nome ?? '', // contínua: removido já saiu da lista
     } : null,
   };
 }
@@ -210,17 +224,32 @@ export async function estadoPublico(codigo) {
   return e;
 }
 
+// Telão automático (/acompanhar/atual): a partida em jogo mais recente ou, sem nenhuma, a última finalizada.
+export async function estadoPublicoAtual() {
+  const p = await db.get("SELECT codigo_online FROM TB_PARTIDA ORDER BY status = 'Finalizada', id_partida DESC LIMIT 1");
+  if (!p) throw erro(404, 'Nenhuma partida ainda.');
+  return estadoPublico(p.codigo_online);
+}
+
 // Etapa 3: dados do certificado virtual, só depois do fim do jogo (o cargo não muda mais).
 // comEmail: só o administrador vê o endereço de envio (RNF04).
+// Partida contínua: quem já terminou tem o certificado na hora, com a data em que terminou.
 export async function certificado(id, idJogador, comEmail) {
   const { p, etapa } = await carregar(id);
-  if (etapa !== 'premiacao' && etapa !== 'finalizada') throw erro(409, 'O certificado só é emitido depois do fim da partida.');
-  const { id_jogador } = await jogadorDaPartida(p.id_partida, idJogador);
-  const j = (await estado(id)).jogadores.find((x) => x.id_jogador === id_jogador);
-  const { email } = await db.get('SELECT email FROM TB_JOGADOR WHERE id_jogador = ?', id_jogador);
+  const fim = etapa === 'premiacao' || etapa === 'finalizada';
+  const NAO_EMITIDO = 'O certificado só é emitido depois do fim da partida.';
+  if (!fim && !p.continua) throw erro(409, NAO_EMITIDO);
+  const jp = await jogadorDaPartida(p.id_partida, idJogador);
+  if (!fim && jp.terminou_em == null) throw erro(409, NAO_EMITIDO);
+  // depois da entrega vale o brinde entregue; antes, o da pontuação (como no estado)
+  const j = await db.get(`SELECT j.nome, e.nome AS escola, j.email,
+      (SELECT b.cargo FROM TB_ENTREGA_BRINDE eb JOIN TB_BRINDE b ON b.id_brinde = eb.id_brinde
+       WHERE eb.id_partida = ? AND eb.id_jogador = j.id_jogador) AS cargo_entregue
+    FROM TB_JOGADOR j JOIN TB_ESCOLA e ON e.id_escola = j.id_escola WHERE j.id_jogador = ?`, p.id_partida, jp.id_jogador);
   return {
-    id_jogador, nome: j.nome, escola: j.escola, cargo: j.brinde?.cargo ?? null, pontuacao: j.pontuacao,
-    unidade: p.unidade, encerrada_em: p.encerrada_em, ...(comEmail && { email }),
+    id_jogador: jp.id_jogador, nome: j.nome, escola: j.escola,
+    cargo: j.cargo_entregue ?? (await brindeDaPontuacao(jp.pontuacao))?.cargo ?? null, pontuacao: jp.pontuacao,
+    unidade: p.unidade, encerrada_em: jp.terminou_em ?? p.encerrada_em, ...(comEmail && { email: j.email }),
   };
 }
 
@@ -228,17 +257,19 @@ export async function certificado(id, idJogador, comEmail) {
 // Cargo: o do brinde entregue ou, antes da entrega, o da pontuação (a regra de brindeDaPontuacao, aqui no próprio SQL
 // para a lista toda sair numa consulta só).
 export function certificados() {
-  return db.all(`SELECT jp.id_partida, jp.id_jogador, j.nome, e.nome AS escola, jp.pontuacao, p.encerrada_em,
+  return db.all(`SELECT jp.id_partida, jp.id_jogador, j.nome, e.nome AS escola, jp.pontuacao, COALESCE(jp.terminou_em, p.encerrada_em) AS encerrada_em,
       COALESCE((SELECT b.cargo FROM TB_ENTREGA_BRINDE eb JOIN TB_BRINDE b ON b.id_brinde = eb.id_brinde
                 WHERE eb.id_partida = jp.id_partida AND eb.id_jogador = jp.id_jogador),
                (SELECT b.cargo FROM TB_BRINDE b WHERE b.pontos_minimos <= jp.pontuacao ORDER BY b.pontos_minimos DESC LIMIT 1)) AS cargo
     FROM TB_JOGADOR_PARTIDA jp JOIN TB_PARTIDA p ON p.id_partida = jp.id_partida
     JOIN TB_JOGADOR j ON j.id_jogador = jp.id_jogador JOIN TB_ESCOLA e ON e.id_escola = j.id_escola
-    WHERE jp.ativo = 1 AND p.status IN ('Premiação', 'Finalizada') ORDER BY j.nome, jp.id_partida DESC`);
+    WHERE jp.ativo = 1 AND (p.status IN ('Premiação', 'Finalizada') OR jp.terminou_em IS NOT NULL) -- contínua: quem já terminou
+    ORDER BY j.nome, jp.id_partida DESC`);
 }
 
-// §4.1 — RF03: 1 a 4 jogadores distintos, cada um com um peão de cor diferente e a sua rota
-export async function criarPartida(usuario, lista) {
+// §4.1 — RF03: 1 a 4 jogadores distintos, cada um com um peão de cor diferente e a sua rota.
+// continua: partida contínua da feira (visitantes entram e saem ao longo do dia, ver adicionarJogador).
+export async function criarPartida(usuario, lista, continua = false) {
   if (!Array.isArray(lista) || lista.length < 1 || lista.length > 4) throw erro(400, 'Selecione de 1 a 4 jogadores.');
   const ids = lista.map((j) => inteiro(j?.id_jogador));
   if (ids.some(Number.isNaN)) throw erro(400, 'Jogador não encontrado.'); // A29: no Set, NaN = NaN pareceria "repetido"
@@ -259,8 +290,8 @@ export async function criarPartida(usuario, lista) {
     let codigo;
     do codigo = Array.from({ length: 6 }, () => ALFABETO[randomInt(ALFABETO.length)]).join('');
     while (await db.get('SELECT 1 FROM TB_PARTIDA WHERE codigo_online = ?', codigo));
-    const { lastInsertRowid } = await db.run(`INSERT INTO TB_PARTIDA (status, codigo_online, unidade, id_mediador, vez)
-                                              VALUES ('Em Andamento', ?, ?, ?, 0)`, codigo, usuario.unidade, usuario.id_usuario);
+    const { lastInsertRowid } = await db.run(`INSERT INTO TB_PARTIDA (status, codigo_online, unidade, id_mediador, vez, continua)
+                                              VALUES ('Em Andamento', ?, ?, ?, 0, ?)`, codigo, usuario.unidade, usuario.id_usuario, continua ? 1 : 0);
     await db.lote(ids.map((idJogador, ordem) => ({
       sql: 'INSERT INTO TB_JOGADOR_PARTIDA (id_partida, id_jogador, ordem, peao, rota) VALUES (?, ?, ?, ?, ?)',
       args: [lastInsertRowid, idJogador, ordem, peoes[ordem], rotas[ordem]],
@@ -273,7 +304,7 @@ export async function criarPartida(usuario, lista) {
 // §4.3 — RF04: o servidor sorteia o dado e o peão anda pela rota do jogador.
 // Só a casa com pergunta deixa a jogada pendente: Chegou! abre a premiação, a caveira elimina e a amarela só passa a vez.
 export const lancarDado = (id, idJogador) => acao(id, async ({ p, etapa }) => {
-  const j = await db.get('SELECT id_jogador, casa_atual, rota FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ativo = 1 AND ordem = ?',
+  const j = await db.get(`SELECT id_jogador, casa_atual, rota FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ordem = ? AND ${JOGANDO}`,
     p.id_partida, p.vez);
   conferirTela(idJogador, j?.id_jogador);
   exigirEtapa(etapa, 'dado');
@@ -284,10 +315,35 @@ export const lancarDado = (id, idJogador) => acao(id, async ({ p, etapa }) => {
   const acaoCasa = acaoDaCasa(casa);
   await db.run(`INSERT INTO TB_JOGADA (id_partida, id_jogador, valor_dado, casa_inicial, casa_final, id_categoria, concluida)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`, p.id_partida, j.id_jogador, v, j.casa_atual, casaFinal, casa.id_categoria, acaoCasa === 'pergunta' ? 0 : 1);
-  await db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = ?, eliminado = ? WHERE id_partida = ? AND id_jogador = ?',
-    casaFinal, acaoCasa === 'morte' ? 1 : 0, p.id_partida, j.id_jogador);
-  if (acaoCasa === 'chegada') await irParaPremiacao(p.id_partida);
+  // Partida contínua: Chegou! e caveira tiram só este jogador do tabuleiro (chaveiro na hora) e a partida segue.
+  const terminou = p.continua && (acaoCasa === 'chegada' || acaoCasa === 'morte') ? agora() : null;
+  await db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = ?, eliminado = ?, terminou_em = ? WHERE id_partida = ? AND id_jogador = ?',
+    casaFinal, acaoCasa === 'morte' ? 1 : 0, terminou, p.id_partida, j.id_jogador);
+  if (acaoCasa === 'chegada' && !p.continua) await irParaPremiacao(p.id_partida);
   else if (acaoCasa !== 'pergunta') await passarVez(p);
+});
+
+// Partida contínua: o próximo visitante entra no fim da fila de vez, numa cor livre, e começa no INÍCIO.
+// No máximo 4 no tabuleiro; cada visitante joga uma vez na partida (a chave é partida + jogador).
+export const adicionarJogador = (id, idJogador, peao, rota = 'esquerda') => acao(id, async ({ p, etapa }) => {
+  if (!p.continua) throw erro(409, 'Só a partida contínua recebe jogadores depois de começar.');
+  if (!EM_JOGO.includes(p.status)) throw erro(409, FORA_DE_HORA[etapa]);
+  const idj = inteiro(idJogador);
+  if (!(await db.get('SELECT 1 FROM TB_JOGADOR WHERE id_jogador = ?', idj))) throw erro(400, 'Jogador não encontrado.');
+  if (await db.get('SELECT 1 FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND id_jogador = ?', p.id_partida, idj)) {
+    throw erro(409, 'Este jogador já jogou nesta partida.');
+  }
+  if (!PEOES.includes(peao)) throw erro(400, 'Peão inválido: escolha verde, vermelho, azul ou amarelo.');
+  if (!Object.keys(ROTAS).includes(rota)) throw erro(400, 'Rota inválida: escolha esquerda, centro ou direita.');
+  const naMesa = await db.all('SELECT peao FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ativo = 1 AND terminou_em IS NULL', p.id_partida);
+  if (naMesa.length >= PEOES.length) throw erro(409, 'O tabuleiro já tem 4 jogadores: espere alguém terminar.');
+  if (naMesa.some((j) => j.peao === peao)) throw erro(409, 'Esta cor de peão está em jogo: escolha outra.');
+  const { ordem } = await db.get('SELECT COALESCE(MAX(ordem), -1) + 1 AS ordem FROM TB_JOGADOR_PARTIDA WHERE id_partida = ?', p.id_partida);
+  await db.run('INSERT INTO TB_JOGADOR_PARTIDA (id_partida, id_jogador, ordem, peao, rota) VALUES (?, ?, ?, ?, ?)', p.id_partida, idj, ordem, peao, rota);
+  // Ninguém mais jogando: a vez é dele
+  if (!(await db.get(`SELECT 1 FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND id_jogador <> ? AND ${JOGANDO}`, p.id_partida, idj))) {
+    await db.run('UPDATE TB_PARTIDA SET vez = ? WHERE id_partida = ?', ordem, p.id_partida);
+  }
 });
 
 // §4.4 — RF05 + RF06: pergunta aleatória e inédita da categoria da casa, gravada na hora
@@ -346,9 +402,12 @@ export const encerrar = (id) => acao(id, async ({ p, pendente, etapa }) => {
 });
 
 // §4.12 — RF08 (um brinde por jogador por partida) + RF09 (baixa automática no estoque)
+// Partida contínua: quem terminou recebe na hora, com a partida em jogo.
 export const entregarBrinde = (id, idJogador, usuario) => acao(id, async ({ p, etapa }) => {
-  if (etapa !== 'premiacao') throw erro(409, etapa === 'finalizada' ? FORA_DE_HORA.finalizada : 'O brinde só é entregue ao final da partida.');
+  const naHora = p.continua && EM_JOGO.includes(p.status);
+  if (etapa !== 'premiacao' && !naHora) throw erro(409, etapa === 'finalizada' ? FORA_DE_HORA.finalizada : 'O brinde só é entregue ao final da partida.');
   const j = await jogadorDaPartida(p.id_partida, idJogador);
+  if (etapa !== 'premiacao' && j.terminou_em == null) throw erro(409, 'O chaveiro é entregue quando o jogador termina: no Chegou! ou na Casa da Morte.');
   if (await db.get('SELECT 1 FROM TB_ENTREGA_BRINDE WHERE id_partida = ? AND id_jogador = ?', p.id_partida, j.id_jogador)) {
     throw erro(409, 'Este jogador já recebeu o brinde desta partida.');
   }
@@ -360,7 +419,7 @@ export const entregarBrinde = (id, idJogador, usuario) => acao(id, async ({ p, e
   if (!baixa.changes) throw erro(409, `O "${b.nome}" esgotou! Não há unidades na mesa.`);
   await db.run('INSERT INTO TB_ENTREGA_BRINDE (id_partida, id_jogador, id_brinde, id_usuario) VALUES (?, ?, ?, ?)',
     p.id_partida, j.id_jogador, b.id_brinde, usuario.id_usuario);
-  await finalizarSeTodosReceberam(p.id_partida);
+  if (etapa === 'premiacao') await finalizarSeTodosReceberam(p.id_partida);
 });
 
 // §4.13 — Admin: mover peão dentro da rota do jogador (sem jogada pendente, partida em jogo).
@@ -369,6 +428,7 @@ export const moverPeao = (id, idJogador, casa) => acao(id, async ({ p, pendente,
   if (!EM_JOGO.includes(p.status)) throw erro(409, FORA_DE_HORA[etapa]);
   if (pendente) throw erro(409, 'Conclua a jogada atual antes de mover um peão.');
   const j = await jogadorDaPartida(p.id_partida, idJogador);
+  if (j.terminou_em != null) throw erro(409, 'Este jogador já terminou a partida.');
   const c = inteiro(casa);
   if (c === CASA_CHEGADA || !ROTAS[j.rota].includes(c)) throw erro(400, 'A casa deve fazer parte da rota deste jogador e não pode ser o Chegou!.');
   await db.run('UPDATE TB_JOGADOR_PARTIDA SET casa_atual = ?, eliminado = 0 WHERE id_partida = ? AND id_jogador = ?', c, p.id_partida, j.id_jogador);
@@ -380,8 +440,9 @@ export const removerJogador = (id, idJogador) => acao(id, async ({ p, pendente, 
   if (!EM_JOGO.includes(p.status)) throw erro(409, FORA_DE_HORA[etapa]);
   if (pendente) throw erro(409, 'Conclua a jogada atual antes de remover um jogador.');
   const j = await jogadorDaPartida(p.id_partida, idJogador);
+  if (j.terminou_em != null) throw erro(409, 'Este jogador já terminou a partida.');
   const ativos = (await db.get('SELECT COUNT(*) AS n FROM TB_JOGADOR_PARTIDA WHERE id_partida = ? AND ativo = 1', p.id_partida)).n;
-  if (ativos === 1) throw erro(409, 'Não é possível remover o último jogador da partida.');
+  if (ativos === 1 && !p.continua) throw erro(409, 'Não é possível remover o último jogador da partida.'); // a contínua fica aguardando
   await db.run('UPDATE TB_JOGADOR_PARTIDA SET ativo = 0 WHERE id_partida = ? AND id_jogador = ?', p.id_partida, j.id_jogador);
   if (j.ordem === p.vez) await passarVez(p);
 });

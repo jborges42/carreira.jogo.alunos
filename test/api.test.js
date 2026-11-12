@@ -824,3 +824,117 @@ test('Banco inicial: alternativas completas, pontos pela dificuldade e letras eq
     (SELECT GROUP_CONCAT(pontos) FROM (SELECT a.pontos FROM TB_ALTERNATIVA a WHERE a.id_pergunta = p.id_pergunta ORDER BY a.pontos)) <> '0,5,10,15'`));
   assert.deepEqual(notasErradas, []);
 });
+
+test('Partida contínua (feira): visitantes entram e saem, chaveiro na hora, telão automático e fim do dia', async () => {
+  for (const b of ok(await M('GET', '/api/brindes'))) ok(await A('PUT', `/api/brindes/${b.id_brinde}`, { quantidade_estoque: 50 }));
+  const cria = async (nome) => ok(await M('POST', '/api/jogadores', { nome, id_escola: escola }), 201).id_jogador;
+  const v = [];
+  for (const n of ['Um', 'Dois', 'Três', 'Quatro', 'Cinco', 'Seis', 'Sete']) v.push(await cria(`Visitante ${n}`));
+  const e0 = ok(await M('POST', '/api/partidas', { jogadores: [{ id_jogador: v[0], peao: 'verde' }, { id_jogador: v[1], peao: 'vermelho' }], continua: true }), 201);
+  assert.equal(e0.partida.continua, true);
+  const url = `/api/partidas/${e0.partida.id_partida}`;
+  const entrar = (i, peao, rota) => M('POST', `${url}/jogadores`, { id_jogador: v[i], peao, rota });
+  const de = (e, i) => e.jogadores.find((j) => j.id_jogador === v[i]);
+  // Telão automático: a partida em jogo mais recente
+  assert.equal(ok(await anonimo('GET', '/api/publico/atual')).partida.codigo_online, e0.partida.codigo_online);
+
+  // Chegou!: só ele termina; a partida segue com a vez do próximo
+  ok(await A('PUT', `${url}/jogadores/${v[0]}/casa`, { casa: 64 }));
+  let e = ok(await dado(url, 6));
+  assert.deepEqual([e.etapa, e.partida.status, de(e, 0).casa_atual, de(e, 0).terminou_em > 0, de(e, 0).entregue, e.jogador_da_vez.id_jogador],
+    ['dado', 'Em Andamento', 65, true, false, v[1]]);
+  // Certificado e chaveiro na hora, só para quem terminou
+  assert.equal(ok(await M('GET', `${url}/certificados/${v[0]}`)).nome, 'Visitante Um');
+  falha(await M('GET', `${url}/certificados/${v[1]}`), 409, 'O certificado só é emitido depois do fim da partida.');
+  falha(await M('POST', `${url}/entregas`, { id_jogador: v[1] }), 409, 'O chaveiro é entregue quando o jogador termina: no Chegou! ou na Casa da Morte.');
+  assert.equal(de(ok(await M('POST', `${url}/entregas`, { id_jogador: v[0] })), 0).entregue, true);
+  assert.ok(ok(await M('GET', '/api/certificados')).some((c) => c.id_jogador === v[0] && c.id_partida === e0.partida.id_partida));
+
+  // A cor de quem terminou fica livre; cor em jogo, jogador repetido e 5º no tabuleiro são recusados
+  falha(await entrar(2, 'vermelho'), 409, 'Esta cor de peão está em jogo: escolha outra.');
+  falha(await entrar(0, 'azul'), 409, 'Este jogador já jogou nesta partida.');
+  ok(await entrar(2, 'verde', 'centro'));
+  ok(await entrar(3, 'azul'));
+  e = ok(await entrar(4, 'amarelo'));
+  assert.deepEqual(e.jogadores.filter((j) => j.terminou_em == null).map((j) => [j.peao, j.casa_atual]),
+    [['vermelho', 0], ['verde', 0], ['azul', 0], ['amarelo', 0]]);
+  assert.equal(e.jogador_da_vez.id_jogador, v[1]); // quem entra vai para o fim da fila
+  falha(await entrar(5, 'verde'), 409, 'O tabuleiro já tem 4 jogadores: espere alguém terminar.');
+
+  // Casa da Morte: sai na hora com o chaveiro e libera a cor
+  ok(await A('PUT', `${url}/jogadores/${v[1]}/casa`, { casa: 16 }));
+  e = ok(await dado(url, 1)); // casa 17 = caveira
+  assert.deepEqual([de(e, 1).eliminado, de(e, 1).terminou_em > 0, e.partida.status, e.jogador_da_vez.id_jogador], [true, true, 'Em Andamento', v[2]]);
+  ok(await entrar(5, 'vermelho'));
+  // No telão, quem terminou continua na lista (com terminou_em) e a vez segue a fila
+  const pub = ok(await anonimo('GET', '/api/publico/atual'));
+  assert.ok(pub.jogadores.some((j) => j.id_jogador === v[0] && j.terminou_em));
+  // A lista "Partida em Andamento" mostra só quem está no tabuleiro
+  const lista = ok(await M('GET', '/api/partidas?status=Em Andamento')).find((p) => p.id_partida === e0.partida.id_partida);
+  assert.deepEqual(lista.jogadores.map((j) => j.id_jogador), [v[2], v[3], v[4], v[5]]);
+
+  // Ninguém jogando: a partida espera o próximo visitante, que já entra com a vez
+  for (const i of [2, 3, 4, 5]) ok(await A('DELETE', `${url}/jogadores/${v[i]}`));
+  e = ok(await M('GET', url));
+  assert.deepEqual([e.etapa, e.jogador_da_vez, e.partida.status], ['aguardando', null, 'Em Andamento']);
+  falha(await M('POST', `${url}/dado`), 409, 'Ninguém está jogando agora: coloque o próximo visitante na partida.');
+  e = ok(await entrar(6, 'azul'));
+  assert.deepEqual([e.etapa, e.jogador_da_vez.id_jogador], ['dado', v[6]]);
+
+  // Fim do dia: encerrar leva à premiação quem ainda joga e quem não recebeu; a partida finaliza com tudo entregue
+  e = ok(await M('POST', `${url}/encerrar`));
+  assert.equal(e.etapa, 'premiacao');
+  ok(await M('POST', `${url}/entregas`, { id_jogador: v[1] }));
+  e = ok(await M('POST', `${url}/entregas`, { id_jogador: v[6] }));
+  assert.equal(e.partida.status, 'Finalizada');
+  falha(await entrar(5, 'verde'), 409, 'A partida já foi finalizada.');
+  // A partida por grupo não recebe ninguém depois de começar
+  falha(await M('POST', `/api/partidas/${p1}/jogadores`, { id_jogador: v[5], peao: 'verde' }), 409, 'Só a partida contínua recebe jogadores depois de começar.');
+});
+
+test('Partida contínua: banco de antes dela é convertido sem perder dados', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'carreira-mig-'));
+  const arq = join(pasta, 'antigo.db');
+  try {
+    // Cria no schema atual e devolve ao formato antigo: sem "continua" e com UNIQUE (id_partida, peao) na tabela
+    process.env.DB_PATH = arq;
+    const atual = (await import('../src/db.js?inicio=mig1')).db;
+    await atual.run("INSERT INTO TB_PARTIDA (codigo_online, id_mediador) VALUES ('MIG001', 1)");
+    await atual.run("INSERT INTO TB_JOGADOR (nome, id_escola) VALUES ('Jogador Antigo', 1)");
+    await atual.run("INSERT INTO TB_JOGADOR_PARTIDA (id_partida, id_jogador, ordem, peao, pontuacao) VALUES (1, 1, 0, 'azul', 42)");
+    atual.close();
+    const velho = new DatabaseSync(arq);
+    velho.exec(`PRAGMA foreign_keys = OFF;
+      DROP INDEX ux_peao_no_tabuleiro;
+      ALTER TABLE TB_PARTIDA DROP COLUMN continua;
+      ALTER TABLE TB_JOGADOR_PARTIDA RENAME TO jp_atual;
+      CREATE TABLE TB_JOGADOR_PARTIDA (
+        id_partida INTEGER NOT NULL REFERENCES TB_PARTIDA(id_partida),
+        id_jogador INTEGER NOT NULL REFERENCES TB_JOGADOR(id_jogador),
+        ordem      INTEGER NOT NULL,
+        peao       TEXT NOT NULL CHECK (peao IN ('verde','vermelho','azul','amarelo')),
+        rota       TEXT NOT NULL DEFAULT 'esquerda' CHECK (rota IN ('esquerda','centro','direita')),
+        casa_atual INTEGER NOT NULL DEFAULT 0 REFERENCES TB_CASA(numero),
+        pontuacao  INTEGER NOT NULL DEFAULT 0,
+        ativo      INTEGER NOT NULL DEFAULT 1,
+        eliminado  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (id_partida, id_jogador),
+        UNIQUE (id_partida, ordem),
+        UNIQUE (id_partida, peao)
+      );
+      INSERT INTO TB_JOGADOR_PARTIDA SELECT id_partida, id_jogador, ordem, peao, rota, casa_atual, pontuacao, ativo, eliminado FROM jp_atual;
+      DROP TABLE jp_atual;`);
+    velho.close();
+    const d = (await import('../src/db.js?inicio=mig2')).db;
+    const sql = (await d.get("SELECT sql FROM sqlite_master WHERE name = 'TB_JOGADOR_PARTIDA'")).sql;
+    assert.ok(!sql.includes('UNIQUE (id_partida, peao)') && sql.includes('terminou_em'), sql);
+    assert.deepEqual({ ...(await d.get('SELECT id_jogador, peao, pontuacao, terminou_em FROM TB_JOGADOR_PARTIDA')) },
+      { id_jogador: 1, peao: 'azul', pontuacao: 42, terminou_em: null });
+    assert.equal((await d.get('SELECT continua FROM TB_PARTIDA')).continua, 0);
+    assert.ok(await d.get("SELECT 1 FROM sqlite_master WHERE name = 'ux_peao_no_tabuleiro'"));
+    d.close();
+  } finally {
+    process.env.DB_PATH = ':memory:';
+    rmSync(pasta, { recursive: true, force: true });
+  }
+});

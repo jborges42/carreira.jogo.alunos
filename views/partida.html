@@ -23,6 +23,22 @@
         <h2 id="titulo-placar">Placar</h2>
         <ol class="lista-placar" id="placar"></ol>
       </section>
+      <!-- Partida contínua (feira): o próximo visitante entra numa cor livre -->
+      <section class="cartao entrar" id="entrar" aria-labelledby="titulo-entrar" hidden>
+        <h2 id="titulo-entrar">Entrar na partida</h2>
+        <div class="rotas" id="entrar-rotas" role="group" aria-label="Rota do próximo visitante"></div>
+        <div class="campo">
+          <label for="entrar-busca">Buscar visitante cadastrado</label>
+          <input type="search" id="entrar-busca" placeholder="Nome, apelido ou escola" autocomplete="off">
+        </div>
+        <p class="suave" id="entrar-dica"></p>
+        <ul class="lista-busca" id="entrar-lista"></ul>
+      </section>
+      <!-- Partida contínua: quem chegou ou caiu na caveira recebe o chaveiro na hora -->
+      <section class="cartao" id="terminaram" aria-labelledby="titulo-terminaram" hidden>
+        <h2 id="titulo-terminaram">Terminaram: entregar o chaveiro</h2>
+        <div class="premios" id="terminaram-lista"></div>
+      </section>
       <details class="cartao admin-partida" id="admin" hidden>
         <summary>Gerenciar partida (Administrador)</summary>
         <div class="campo">

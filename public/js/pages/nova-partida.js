@@ -97,6 +97,7 @@ $iniciar.addEventListener('click', async (ev) => {
   try {
     const estado = await api('POST', '/api/partidas', {
       jogadores: escolhidos.map(({ id_jogador, peao, rota }) => ({ id_jogador, peao, rota })),
+      continua: document.getElementById('continua').checked,
     });
     location.href = `/partida/${estado.partida.id_partida}`; // continua "iniciando" até a página trocar
   } catch (e) {

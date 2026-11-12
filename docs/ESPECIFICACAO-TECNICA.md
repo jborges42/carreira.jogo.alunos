@@ -172,6 +172,19 @@ Nenhuma seta da arte define o sentido do anel no trecho do Centro: foi escolhida
 14. **Tela desatualizada** — `POST .../dado` aceita `id_jogador` (o jogador da vez exibido na tela) e `POST .../sortear`, `.../pular` e `.../resposta` aceitam `id_jogada` (a jogada pendente exibida), todos opcionais. Se o campo vier e não bater com o estado atual → 409 `A partida mudou: recarregue a tela.` e nada é gravado; sem o campo, não há conferência.
 15. **Certificado [FASE 2]** — só nas etapas `premiacao` e `finalizada` (antes → 409 `O certificado só é emitido depois do fim da partida.`), para jogador ativo da partida, inclusive eliminado (removido → 409 `Este jogador foi removido da partida.`). Traz o cargo do `brinde` do jogador e os pontos. O `email` só vai para o perfil Administrador (RNF04).
 
+### Partida contínua (feira) — regras do usuário
+
+Opção da Nova Partida para a feira: uma partida só, o dia todo, com visitantes entrando e saindo (`TB_PARTIDA.continua = 1`).
+
+- **Tabuleiro:** até 4 jogadores ao mesmo tempo, um por cor. A cor é única só entre quem está no tabuleiro (índice parcial `ux_peao_no_tabuleiro`, `ativo = 1 AND terminou_em IS NULL`).
+- **Entrada:** `POST /api/partidas/:id/jogadores` `{ id_jogador, peao, rota }` (mediador ou administrador), com a partida Em Andamento ou Pausada. O visitante começa no INÍCIO e entra no fim da fila de vez; se ninguém estiver jogando, a vez é dele. Cada visitante joga uma vez na partida (409 "Este jogador já jogou nesta partida."); com 4 no tabuleiro, 409.
+- **Saída:** chegar ao Chegou! ou cair na Casa da Morte grava `terminou_em` só para aquele jogador (a caveira também marca `eliminado`) e passa a vez; a partida segue. O chaveiro dele é entregue na hora (`POST /entregas` com a partida em jogo) e o certificado já sai, com a data em que terminou. Quem ainda não terminou recebe 409 nas duas ações.
+- **Ninguém jogando:** etapa `aguardando` (o dado responde 409 até alguém entrar).
+- **Fim do dia:** **Encerrar** leva à premiação quem ainda joga e quem não recebeu o chaveiro; com tudo entregue, Finalizada.
+- **Estado:** `partida.continua` e `jogadores[].terminou_em`. Na contínua, `jogadores` traz só quem está na mesa: jogando, esperando o chaveiro e os 6 últimos a terminar. Os demais estão nos certificados e nos relatórios.
+- **Telão automático:** `/acompanhar/atual` consulta `GET /api/publico/atual` (a partida em jogo mais recente ou, sem nenhuma, a última finalizada). Na contínua, mostra só quem joga no tabuleiro e no placar, a lista "Terminaram" e o cargo de quem acabou de terminar.
+- **Banco antigo:** na subida, ganha a coluna `continua` e tem `TB_JOGADOR_PARTIDA` recriada sem o `UNIQUE (id_partida, peao)`, numa transação (teste "banco de antes dela é convertido").
+
 ## 5. API
 
 Todas exigem login (`exigeLogin`), exceto as marcadas **pública**; as marcadas **admin** usam `exigeAdmin`. Toda rota `/api` com método diferente de GET/HEAD passa antes pelo bloqueio de origem cruzada (§2). Já implementadas em `src/auth.js`: `POST /api/login {email, senha}` → `{usuario}` (400 `Informe e-mail e senha.` · 401 `E-mail ou senha inválidos.`); `POST /api/logout` → 204; `GET /api/me` → `{usuario:{id_usuario,nome,email,perfil,unidade}}`.

@@ -83,3 +83,12 @@
   background: var(--vermelho); color: #fff; border: var(--contorno); border-radius: 12px;
   font-size: 26px; font-weight: 700; letter-spacing: .08em;
 }
+
+/* ---------- Partida contínua (feira) ---------- */
+.opcao-continua {
+  display: flex; align-items: flex-start; gap: 12px; margin: 0 0 16px; padding: 12px 14px;
+  border: 2px solid var(--linha); border-radius: 12px; background: var(--papel-2); cursor: pointer;
+}
+.opcao-continua input { flex: none; width: 26px; height: 26px; margin: 0; accent-color: var(--azul-escuro); }
+.entrar .lista-busca { max-height: 40vh; margin-top: 10px; }
+.entrar .peoes { display: flex; gap: 6px; }

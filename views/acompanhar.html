@@ -21,6 +21,7 @@
       <input type="text" id="codigo" name="codigo" placeholder="K7P2QX" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="dica-codigo">
       <p id="dica-codigo" class="suave">São 6 letras e números. O código aparece na tela do mediador.</p>
       <button type="submit" class="btn btn-primario">Acompanhar</button>
+      <p class="suave">No telão da feira, use o <a href="/acompanhar/atual">telão automático</a>: ele mostra sempre a partida mais recente.</p>
     </form>
   </main>
 
@@ -43,6 +44,11 @@
         <section class="cartao placar-cartao" aria-labelledby="titulo-placar">
           <h2 id="titulo-placar">Placar</h2>
           <ol id="t-placar" class="placar"></ol>
+        </section>
+        <!-- Partida contínua: os últimos a terminar -->
+        <section class="cartao placar-cartao" id="t-terminaram-cartao" aria-labelledby="titulo-terminaram" hidden>
+          <h2 id="titulo-terminaram">Terminaram</h2>
+          <ol id="t-terminaram" class="placar"></ol>
         </section>
       </div>
     </div>

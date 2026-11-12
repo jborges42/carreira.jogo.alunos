@@ -23,6 +23,9 @@ let acoes = 0; // A9: conta as ações; o GET da vigia que saiu antes de uma aç
 
 const msgErro = (e) => (e.status ? e.message : 'Sem conexão com o servidor. Confira a rede e tente de novo.');
 const ativos = () => estado.jogadores.filter((j) => j.ativo);
+// Partida contínua: quem chegou ou caiu na caveira sai do tabuleiro (terminou_em) e recebe o chaveiro na hora.
+const naMesa = () => ativos().filter((j) => j.terminou_em == null);
+const terminaram = () => ativos().filter((j) => j.terminou_em != null).sort((a, b) => b.terminou_em - a.terminou_em);
 const comApelido = (j) => `${esc(j.nome)}${j.apelido ? ` <small>(${esc(j.apelido)})</small>` : ''}`;
 const peao = (cor) => `<span class="peao-mini">${peaoSVG(cor)}</span>`;
 // Texto escuro sobre cor clara (amarelo #F2C200), branco nas demais — brilho YIQ.
@@ -109,6 +112,9 @@ const ETAPAS = {
   // A pergunta aparece na sobreposição de tela cheia (renderPergunta).
   responder: () => `${blocoVez()}${movimento()}`,
 
+  aguardando: () => `<div class="aviso aviso-alerta">Ninguém está jogando agora: coloque o próximo visitante em
+      <strong>Entrar na partida</strong>.</div>${feedback()}`,
+
   pausada: () => `<div class="pausada"><strong>Partida pausada</strong><span>O cronômetro está parado.</span>
       <button class="btn btn-primario btn-grande" data-acao="retomar">Retomar</button></div>
     ${blocoVez()}${estado.jogada_pendente ? movimento() : feedback() + botaoDado(true)}`,
@@ -117,7 +123,8 @@ const ETAPAS = {
     const u = estado.ultima_jogada;
     // A jogada que encerrou a partida mostra o número sorteado: a tela não passa pela etapa de dado de novo.
     const ultimoDado = ['chegada', 'morte'].includes(u?.casa.acao) ? resultadoJogada(u, `<strong>${esc(u.nome)}</strong>`).html : '';
-    const motivo = u?.casa.acao === 'chegada' ? ultimoDado
+    const motivo = estado.partida.continua ? 'A partida contínua foi encerrada.'
+      : u?.casa.acao === 'chegada' ? ultimoDado
       : ativos().every((j) => j.eliminado) ? `${ultimoDado} Todos os jogadores caíram na Casa da Morte.` : 'A partida foi encerrada.';
     return `<h2 class="titulo-etapa">Premiação</h2>
       <div class="aviso aviso-ok">${motivo}
@@ -142,10 +149,13 @@ function cabecalho() {
   const { partida: p, etapa } = estado;
   const codigo = esc(p.codigo_online);
   const emJogo = p.status === 'Em Andamento' || p.status === 'Pausada';
+  // Partida contínua: o telão da feira é o automático, que segue sempre a partida mais recente.
+  const telao = p.continua ? '/acompanhar/atual' : `/acompanhar/${codigo}`;
   return `<h1 class="titulo-pagina">Partida #${p.id_partida}</h1>
     <span class="selo status" data-status="${esc(p.status)}">${esc(p.status)}</span>
+    ${p.continua ? '<span class="chip">Partida contínua</span>' : ''}
     <span class="chip">Código da sessão <span class="codigo">${codigo}</span>
-      <a class="btn btn-pequeno" href="/acompanhar/${codigo}" target="_blank" rel="noopener">Abrir telão</a></span>
+      <a class="btn btn-pequeno" href="${telao}" target="_blank" rel="noopener">Abrir telão</a></span>
     <span class="chip cronometro">Tempo <strong id="cronometro">00:00</strong></span>
     <span class="cab-acoes">
       ${etapa === 'pausada' ? '<button class="btn btn-primario" data-acao="retomar">Retomar</button>'
@@ -166,7 +176,7 @@ function renderAdmin() {
   const { etapa } = estado;
   $('#admin').hidden = !ehAdmin(usuario) || etapa === 'premiacao' || etapa === 'finalizada';
   if ($('#admin').hidden) return;
-  const lista = ativos(), antes = admJogador.value;
+  const lista = naMesa(), antes = admJogador.value;
   admJogador.innerHTML = lista.map((j) => `<option value="${j.id_jogador}">${esc(j.nome)} (casa ${j.casa_atual}, ${NOMES_ROTA[j.rota]}${j.eliminado ? ', fora do jogo' : ''})</option>`).join('');
   if (lista.some((j) => String(j.id_jogador) === antes)) admJogador.value = antes;
   admCasa.value = lista.find((j) => String(j.id_jogador) === admJogador.value)?.casa_atual ?? '';
@@ -208,8 +218,49 @@ function renderPergunta() {
 }
 
 function desenharPeoes() {
-  tab.atualizar(estado.jogadores, { destaque: estado.jogada_pendente?.casa_final ?? null });
+  tab.atualizar(estado.jogadores.filter((j) => j.terminou_em == null), { destaque: estado.jogada_pendente?.casa_final ?? null });
 }
+
+// ---------- Partida contínua: entrar na partida e entregar o chaveiro de quem terminou ----------
+let rotaEntrar = 'esquerda', encontrados = [], seqEntrar = 0, esperaEntrar;
+
+function renderContinua() {
+  const p = estado.partida;
+  const emJogo = p.continua && (p.status === 'Em Andamento' || p.status === 'Pausada');
+  $('#entrar').hidden = !emJogo;
+  $('#terminaram').hidden = !emJogo || !terminaram().length;
+  if (!emJogo) return;
+  $('#terminaram-lista').innerHTML = terminaram().map(cartaoPremio).join('');
+  const usadas = naMesa().map((j) => j.peao);
+  const livres = Object.keys(CORES_PEAO).filter((cor) => !usadas.includes(cor));
+  $('#entrar-rotas').innerHTML = `<span class="rotas-rotulo">Rota:</span>${Object.entries(NOMES_ROTA).map(([rota, nome]) =>
+    `<button class="opcao-rota" data-rota-entrar="${rota}" aria-pressed="${rota === rotaEntrar}">${nome}</button>`).join('')}`;
+  $('#entrar-dica').textContent = livres.length
+    ? 'Toque na cor do peão do visitante: ele entra no INÍCIO, na rota escolhida, e joga depois de quem já está na fila.'
+    : 'O tabuleiro está cheio (4 jogadores): espere alguém terminar.';
+  $('#entrar-lista').innerHTML = livres.length ? encontrados.slice(0, 8).map((j) => `<li>
+      <div class="info"><strong class="nome">${esc(j.nome)}</strong>${j.apelido ? ` <span class="suave">(${esc(j.apelido)})</span>` : ''}
+        <div class="suave">${esc(j.escola)}</div>${j.em_partida ? '<span class="selo selo-alerta">Em partida</span>' : ''}</div>
+      <div class="peoes">${livres.map((cor) => `<button class="opcao-peao" data-acao="entrar" data-jogador="${j.id_jogador}" data-peao="${cor}"
+        title="Entrar com o peão ${CORES_PEAO[cor].nome}">${peaoSVG(cor, `Entrar com o peão ${CORES_PEAO[cor].nome}`)}</button>`).join('')}</div>
+    </li>`).join('') || '<li class="vazio">Nenhum visitante encontrado. <a href="/recepcao" target="_blank" rel="noopener">Cadastrar na Recepção</a></li>' : '';
+}
+
+// Sem busca, vêm os cadastrados mais recentes: quem acabou de passar pela Recepção.
+async function buscarEntrar() {
+  const n = ++seqEntrar;
+  try {
+    const lista = await api('GET', `/api/jogadores?q=${encodeURIComponent($('#entrar-busca').value.trim())}`);
+    if (n === seqEntrar) { encontrados = lista; renderContinua(); }
+  } catch (e) {
+    toast(msgErro(e), 'erro');
+  }
+}
+$('#entrar-busca').addEventListener('input', () => { clearTimeout(esperaEntrar); esperaEntrar = setTimeout(buscarEntrar, 300); });
+$('#entrar-rotas').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-rota-entrar]');
+  if (b) { rotaEntrar = b.dataset.rotaEntrar; renderContinua(); }
+});
 
 function tick() {
   const el = document.getElementById('cronometro');
@@ -223,7 +274,8 @@ function render(novo) {
   jogo.classList.toggle('fim', etapa === 'premiacao' || etapa === 'finalizada');
   $('#cab').innerHTML = cabecalho();
   $('#etapa').innerHTML = ETAPAS[etapa]?.() ?? '';
-  $('#placar').innerHTML = estado.jogadores.map(linhaPlacar).join('');
+  $('#placar').innerHTML = estado.jogadores.filter((j) => j.terminou_em == null).map(linhaPlacar).join('');
+  renderContinua();
   renderAdmin();
   renderPergunta();
   desenharPeoes();
@@ -316,6 +368,10 @@ document.addEventListener('click', (ev) => {
   if (a === 'resposta') return acao('POST', '/resposta', { alternativa: b.dataset.letra, id_jogada: idJogada });
   if (a === 'sortear' || a === 'pular') return acao('POST', `/${a}`, { id_jogada: idJogada });
   if (a === 'entregas') return acao('POST', '/entregas', { id_jogador: Number(b.dataset.jogador) });
+  if (a === 'entrar') { // partida contínua: o visitante entra com a cor tocada
+    $('#entrar-busca').value = '';
+    return acao('POST', '/jogadores', { id_jogador: Number(b.dataset.jogador), peao: b.dataset.peao, rota: rotaEntrar }).then(buscarEntrar);
+  }
   if (a === 'mover') {
     const casa = admCasa.valueAsNumber;
     if (!Number.isInteger(casa) || casa < 0) return toast('Informe o número da casa.', 'erro');
@@ -353,4 +409,5 @@ try {
 if (estado) {
   tab = criarTabuleiro($('#tabuleiro'), tabuleiro);
   render(estado);
+  if (estado.partida.continua) buscarEntrar();
 }

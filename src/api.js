@@ -28,6 +28,7 @@ api.get('/tabuleiro', async (req, res) => {
   res.json({ imagem: '/img/tabuleiro.png', largura: 1078, altura: 948, casa_chegada: jogo.CASA_CHEGADA, casas, rotas: ROTAS });
 });
 api.get('/publico/partidas/:codigo', async (req, res) => res.json(await jogo.estadoPublico(req.params.codigo)));
+api.get('/publico/atual', async (req, res) => res.json(await jogo.estadoPublicoAtual())); // telão automático
 
 api.use(exigeLogin); // RNF04: daqui para baixo, só logado
 
@@ -214,9 +215,9 @@ api.put('/brindes/:id', exigeAdmin, async (req, res) => {
 });
 
 // ---------- RF03–RF09 — Partidas (regras em jogo.js) ----------
-const SQL_PARTIDA = `SELECT p.id_partida, p.status, p.codigo_online, p.iniciada_em, p.finalizada_em, u.nome AS mediador
+const SQL_PARTIDA = `SELECT p.id_partida, p.status, p.codigo_online, p.iniciada_em, p.finalizada_em, p.continua, u.nome AS mediador
   FROM TB_PARTIDA p JOIN TB_USUARIO u ON u.id_usuario = p.id_mediador`;
-const jogadoresAtivos = async (idPartida) => (await db.all(`SELECT j.id_jogador, j.nome, jp.peao, jp.rota, jp.casa_atual, jp.pontuacao, jp.eliminado
+const jogadoresAtivos = async (idPartida) => (await db.all(`SELECT j.id_jogador, j.nome, jp.peao, jp.rota, jp.casa_atual, jp.pontuacao, jp.eliminado, jp.terminou_em
   FROM TB_JOGADOR_PARTIDA jp JOIN TB_JOGADOR j ON j.id_jogador = jp.id_jogador
   WHERE jp.id_partida = ? AND jp.ativo = 1 ORDER BY jp.ordem`, idPartida)).map((j) => ({ ...j, eliminado: Boolean(j.eliminado) }));
 
@@ -225,10 +226,14 @@ api.get('/partidas', async (req, res) => {
   const status = texto(req.query.status).split(',').map((s) => s.trim()).filter(Boolean);
   const filtro = status.length ? `WHERE p.status IN (${status.map(() => '?').join(', ')})` : '';
   const partidas = await db.all(`${SQL_PARTIDA} ${filtro} ORDER BY p.id_partida DESC LIMIT 100`, ...status);
-  res.json(await Promise.all(partidas.map(async (p) => ({ ...p, jogadores: await jogadoresAtivos(p.id_partida) }))));
+  // Partida contínua: só quem está no tabuleiro (quem já terminou está nos certificados)
+  res.json(await Promise.all(partidas.map(async (p) => ({ ...p, jogadores: (await jogadoresAtivos(p.id_partida)).filter((j) => j.terminou_em == null) }))));
 });
 
-api.post('/partidas', async (req, res) => res.status(201).json(await jogo.criarPartida(req.usuario, req.body?.jogadores)));
+api.post('/partidas', async (req, res) => res.status(201).json(await jogo.criarPartida(req.usuario, req.body?.jogadores, req.body?.continua === true)));
+// Partida contínua: o próximo visitante entra (o mediador conduz a feira, então não precisa ser administrador)
+api.post('/partidas/:id/jogadores', async (req, res) =>
+  res.json(await jogo.adicionarJogador(req.params.id, req.body?.id_jogador, req.body?.peao, req.body?.rota)));
 api.get('/partidas/:id', async (req, res) => res.json(await jogo.estado(req.params.id)));
 api.get('/certificados', async (req, res) => res.json(await jogo.certificados()));
 api.get('/partidas/:id/certificados/:id_jogador', async (req, res) =>

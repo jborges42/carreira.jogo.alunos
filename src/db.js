@@ -51,6 +51,23 @@ if (!remoto && await db.get("SELECT 1 FROM pragma_table_info('TB_BRINDE') WHERE 
   throw new Error(`${DB_PATH} é da fase 1 e não é migrado. Pare o servidor, guarde esse arquivo em outra pasta (com -wal e -shm, se existirem) e inicie de novo.`);
 }
 if (!remoto) await db.exec('PRAGMA journal_mode = WAL;');
+// JOGADOR_PARTIDA (modelo lógico). A cor do peão é única só entre quem está no tabuleiro (índice ux_peao_no_tabuleiro):
+// na partida contínua, quem termina libera a cor para o próximo visitante.
+const SQL_JOGADOR_PARTIDA = `CREATE TABLE IF NOT EXISTS TB_JOGADOR_PARTIDA (
+  id_partida  INTEGER NOT NULL REFERENCES TB_PARTIDA(id_partida),
+  id_jogador  INTEGER NOT NULL REFERENCES TB_JOGADOR(id_jogador),
+  ordem       INTEGER NOT NULL,
+  peao        TEXT NOT NULL CHECK (peao IN ('verde','vermelho','azul','amarelo')),
+  rota        TEXT NOT NULL DEFAULT 'esquerda' CHECK (rota IN ('esquerda','centro','direita')),
+  casa_atual  INTEGER NOT NULL DEFAULT 0 REFERENCES TB_CASA(numero),  -- FK ID_CASA_TABULEIRO (modelo lógico)
+  pontuacao   INTEGER NOT NULL DEFAULT 0,
+  ativo       INTEGER NOT NULL DEFAULT 1,              -- STATUS: 0 = removido da partida (sem brinde)
+  eliminado   INTEGER NOT NULL DEFAULT 0,              -- 1 = caiu na Casa da Morte: não joga mais, mas recebe o brinde
+  terminou_em INTEGER,                                 -- partida contínua: saiu do tabuleiro (Chegou! ou caveira)
+  PRIMARY KEY (id_partida, id_jogador),
+  UNIQUE (id_partida, ordem)
+)`;
+
 // Chaves estrangeiras: o libSQL local as confere sempre; o Turso, não (vem desligado e vale por conexão). Por isso o
 // único efeito de que o app depende — o ON DELETE da exclusão de pergunta — é feito também no código (api.js).
 
@@ -129,22 +146,10 @@ CREATE TABLE IF NOT EXISTS TB_PARTIDA (               -- RF03
   encerrada_em      INTEGER,                             -- fim do jogo (início da premiação)
   finalizada_em     INTEGER,                             -- todos os brindes confirmados
   pausada_em        INTEGER,
-  segundos_pausados INTEGER NOT NULL DEFAULT 0
+  segundos_pausados INTEGER NOT NULL DEFAULT 0,
+  continua          INTEGER NOT NULL DEFAULT 0           -- 1 = partida contínua (feira): jogadores entram e saem
 );
-CREATE TABLE IF NOT EXISTS TB_JOGADOR_PARTIDA (       -- JOGADOR_PARTIDA (modelo lógico)
-  id_partida INTEGER NOT NULL REFERENCES TB_PARTIDA(id_partida),
-  id_jogador INTEGER NOT NULL REFERENCES TB_JOGADOR(id_jogador),
-  ordem      INTEGER NOT NULL,
-  peao       TEXT NOT NULL CHECK (peao IN ('verde','vermelho','azul','amarelo')),
-  rota       TEXT NOT NULL DEFAULT 'esquerda' CHECK (rota IN ('esquerda','centro','direita')),
-  casa_atual INTEGER NOT NULL DEFAULT 0 REFERENCES TB_CASA(numero),  -- FK ID_CASA_TABULEIRO (modelo lógico)
-  pontuacao  INTEGER NOT NULL DEFAULT 0,
-  ativo      INTEGER NOT NULL DEFAULT 1,               -- STATUS: 0 = removido da partida (sem brinde)
-  eliminado  INTEGER NOT NULL DEFAULT 0,               -- 1 = caiu na Casa da Morte: não joga mais, mas recebe o brinde
-  PRIMARY KEY (id_partida, id_jogador),
-  UNIQUE (id_partida, ordem),
-  UNIQUE (id_partida, peao)
-);
+${SQL_JOGADOR_PARTIDA};
 CREATE TABLE IF NOT EXISTS TB_JOGADA (                -- RF04/RF07 (+ CARTA_PARTIDA via id_pergunta)
   id_jogada    INTEGER PRIMARY KEY AUTOINCREMENT,
   id_partida   INTEGER NOT NULL REFERENCES TB_PARTIDA(id_partida),
@@ -173,6 +178,25 @@ CREATE TABLE IF NOT EXISTS TB_ENTREGA_BRINDE (        -- RF08 (+ id_partida p/ "
   UNIQUE (id_partida, id_jogador)
 );
 `);
+
+// Partida contínua: banco criado antes dela ganha a coluna "continua" e tem TB_JOGADOR_PARTIDA recriada (o SQLite só
+// tira o UNIQUE (id_partida, peao) da tabela recriando-a). Numa transação de escrita: duas instâncias subindo juntas
+// não convertem duas vezes.
+await transacao(async () => {
+  if (!(await db.get("SELECT 1 FROM pragma_table_info('TB_PARTIDA') WHERE name = 'continua'"))) {
+    await db.run('ALTER TABLE TB_PARTIDA ADD COLUMN continua INTEGER NOT NULL DEFAULT 0');
+  }
+  if ((await db.get("SELECT sql FROM sqlite_master WHERE name = 'TB_JOGADOR_PARTIDA'")).sql.includes('UNIQUE (id_partida, peao)')) {
+    const colunas = 'id_partida, id_jogador, ordem, peao, rota, casa_atual, pontuacao, ativo, eliminado';
+    await db.lote([
+      { sql: SQL_JOGADOR_PARTIDA.replace('TB_JOGADOR_PARTIDA', 'TB_JOGADOR_PARTIDA_NOVA') },
+      { sql: `INSERT INTO TB_JOGADOR_PARTIDA_NOVA (${colunas}) SELECT ${colunas} FROM TB_JOGADOR_PARTIDA` },
+      { sql: 'DROP TABLE TB_JOGADOR_PARTIDA' },
+      { sql: 'ALTER TABLE TB_JOGADOR_PARTIDA_NOVA RENAME TO TB_JOGADOR_PARTIDA' },
+    ]);
+  }
+  await db.run('CREATE UNIQUE INDEX IF NOT EXISTS ux_peao_no_tabuleiro ON TB_JOGADOR_PARTIDA(id_partida, peao) WHERE ativo = 1 AND terminou_em IS NULL');
+});
 
 const json = (arq) => JSON.parse(readFileSync(join(RAIZ, 'data', arq), 'utf8'));
 

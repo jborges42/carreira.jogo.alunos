@@ -1,5 +1,6 @@
 // Telão / DataShow (pública): acompanha a partida pelo código da sessão.
 // Atende o "consulta pontuação" do jogador e a plateia (perfil Espectador). Atualiza a cada 2 s.
+// /acompanhar/atual: telão automático da feira, que segue sozinho a partida mais recente.
 import { api, iniciarPagina, esc, valorDaPergunta, resultadoJogada } from '/js/app.js';
 import { criarTabuleiro, peaoSVG, CORES_PEAO } from '/js/tabuleiro.js';
 
@@ -7,6 +8,7 @@ await iniciarPagina({ publica: true });
 
 const $ = (id) => document.getElementById(id);
 const codigo = (location.pathname.split('/')[2] || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const automatico = codigo === 'ATUAL'; // nenhum código de partida tem 5 letras
 let tabuleiro;   // { atualizar } de criarTabuleiro
 let ultimo = ''; // último estado desenhado: só redesenha quando algo muda
 
@@ -58,7 +60,10 @@ function pendente(e, p) {
 
 function feedback(e, u) {
   const { tipo, html } = resultadoJogada(u, `<strong>${esc(nomeDe(e, u.id_jogador, u.nome))}</strong>`);
-  return `<div class="feedback ${tipo}">${html}</div>`;
+  // Partida contínua: quem chega ou cai na caveira sai na hora, com o chaveiro do cargo alcançado.
+  const saiu = e.partida.continua && ['chegada', 'morte'].includes(u.casa.acao) && e.jogadores.find((j) => j.id_jogador === u.id_jogador);
+  const cargo = saiu?.brinde ? `<br>Cargo alcançado: <strong>${esc(saiu.brinde.cargo)}</strong>` : '';
+  return `<div class="feedback ${tipo}">${html}${cargo}</div>`;
 }
 
 function podio(ativos) {
@@ -71,6 +76,7 @@ function destaque(e, ativos) {
   const { etapa, jogador_da_vez: vez, jogada_pendente: pend, ultima_jogada: ult } = e;
   const partes = [];
   if (etapa === 'pausada') partes.push('<div class="faixa-status pausada">Partida pausada</div>');
+  if (etapa === 'aguardando') partes.push('<div class="faixa-status">Aguardando o próximo visitante</div>');
   if (etapa === 'premiacao') {
     const chegou = ult?.casa.acao === 'chegada' ? `${esc(nomeDe(e, ult.id_jogador, ult.nome))} tirou ${esc(ult.valor_dado)} e chegou! ` : '';
     partes.push(`<div class="faixa-status premiacao">${chegou}Fim de jogo: hora da premiação!</div>`);
@@ -84,9 +90,18 @@ function destaque(e, ativos) {
   }
   // Em pausa, a pergunta some também do telão, como na tela do mediador: ninguém discute a resposta com o tempo parado.
   if (pend) partes.push(pendente(e, etapa === 'pausada' ? { ...pend, pergunta: null } : pend));
-  if ((etapa === 'dado' || etapa === 'pausada') && !pend && ult) partes.push(feedback(e, ult));
+  if (['dado', 'pausada', 'aguardando'].includes(etapa) && !pend && ult) partes.push(feedback(e, ult));
   return partes.join('');
 }
+
+// Partida contínua: os últimos a terminar, do mais recente ao mais antigo.
+const linhaTerminou = (j) => `
+    <li>
+      <span class="placar-peao">${peao(j)}</span>
+      <span class="placar-nome">${esc(j.nome)}<small>${esc(j.brinde?.cargo || 'Sem cargo')}${j.entregue ? ' · entregue ✓' : ''}</small></span>
+      <span class="placar-num"><small>Casa</small>${j.eliminado ? '☠' : '<span class="chegou">Chegou!</span>'}</span>
+      <span class="placar-num"><small>Pontos</small>${esc(j.pontuacao)}</span>
+    </li>`;
 
 function placar(e, ativos) {
   const fim = e.etapa === 'premiacao' || e.etapa === 'finalizada';
@@ -106,19 +121,34 @@ addEventListener('resize', ajustarAltura);
 
 function desenhar(e) {
   ajustarAltura();
+  if (automatico) { // a partida pode ter mudado
+    $('t-codigo').textContent = e.partida.codigo_online;
+    document.title = `Partida ${e.partida.codigo_online} · Carreira em Jogo`;
+  }
   const ativos = e.jogadores.filter((j) => j.ativo !== false);
-  tabuleiro.atualizar(ativos, { destaque: e.jogada_pendente?.casa_final ?? null });
+  // Partida contínua: no tabuleiro e no placar, só quem está jogando; quem terminou vai para "Terminaram".
+  const naMesa = ativos.filter((j) => j.terminou_em == null);
+  const terminaram = ativos.filter((j) => j.terminou_em != null).sort((a, b) => b.terminou_em - a.terminou_em);
+  tabuleiro.atualizar(naMesa, { destaque: e.jogada_pendente?.casa_final ?? null });
   $('t-status').textContent = e.partida.status;
   $('t-status').dataset.status = e.partida.status;
   $('t-destaque').innerHTML = destaque(e, ativos);
-  $('t-placar').innerHTML = placar(e, ativos);
+  $('t-placar').innerHTML = placar(e, naMesa);
+  $('t-terminaram-cartao').hidden = !terminaram.length;
+  $('t-terminaram').innerHTML = terminaram.map(linhaTerminou).join('');
 }
 
 // fetch direto (sem api()): a consulta automática não deve cobrir o telão com o spinner do RNF03.
 async function atualizar() {
   if (!document.hidden) {
     try {
-      const r = await fetch(`/api/publico/partidas/${codigo}`, { cache: 'no-store', signal: AbortSignal.timeout?.(8000) });
+      const url = automatico ? '/api/publico/atual' : `/api/publico/partidas/${codigo}`;
+      const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout?.(8000) });
+      if (r.status === 404 && automatico) { // nenhuma partida ainda: espera a primeira
+        $('t-destaque').innerHTML = '<div class="faixa-status">Aguardando a primeira partida</div>';
+        $('t-conexao').hidden = true;
+        return setTimeout(atualizar, 2000);
+      }
       if (r.status === 404) return entrada('Partida não encontrada.');
       if (!r.ok) throw new Error(`Erro ${r.status}`);
       const estado = await r.json();
@@ -145,8 +175,8 @@ document.addEventListener('fullscreenchange', () => {
 if (!codigo) {
   entrada();
 } else {
-  document.title = `Partida ${codigo} · Carreira em Jogo`;
-  $('t-codigo').textContent = codigo;
+  document.title = automatico ? 'Telão · Carreira em Jogo' : `Partida ${codigo} · Carreira em Jogo`;
+  $('t-codigo').textContent = automatico ? '…' : codigo;
   try {
     tabuleiro = criarTabuleiro($('t-tabuleiro'), await api('GET', '/api/tabuleiro'));
     $('telao').hidden = false; // já mostra o tabuleiro: se a rede falhar, aparece o aviso "Sem conexão"
